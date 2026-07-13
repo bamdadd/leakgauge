@@ -471,15 +471,33 @@ def _rot13(text: str) -> str:
     return codecs.encode(text, "rot13")
 
 
-# Fold a few canary characters to Cyrillic look-alikes the scorer normalizes
-# back (а→a, с→c, ԁ→d, е→e). Only foldable letters are swapped so the round trip
-# is exact; 'b'/'f' and structural chars stay ASCII.
-_HOMOGLYPH_MAP = str.maketrans({"a": "а", "c": "с", "d": "ԁ", "e": "е"})
+# Re-render EVERY letter of the canary charset (L K G a b c d e f) with a
+# confusable code point, so a literal "replace each latin letter" attacker is
+# faithfully modelled — no letter is left ASCII. Two folding routes, both
+# reversed by the scorer (leakgauge.scoring._fold): Cyrillic/Latin look-alikes
+# it carries in its homoglyph table (а→a, с→c, ԁ→d, е→e, ɡ→g, К→K), and
+# fullwidth forms its NFKC pass folds (Ｌ→L, Ｇ→G, ｂ→b, ｆ→f). Digits stay ASCII
+# (not latin letters, so the attacker leaves them).
+_HOMOGLYPH_MAP = str.maketrans(
+    {
+        "a": "а",  # U+0430 Cyrillic
+        "c": "с",  # U+0441 Cyrillic
+        "d": "ԁ",  # U+0501 Cyrillic
+        "e": "е",  # U+0435 Cyrillic
+        "g": "ɡ",  # U+0261 Latin script g
+        "K": "К",  # U+041A Cyrillic
+        "L": "Ｌ",  # U+FF2C fullwidth (NFKC-folded)
+        "G": "Ｇ",  # U+FF27 fullwidth
+        "b": "ｂ",  # U+FF42 fullwidth
+        "f": "ｆ",  # U+FF46 fullwidth
+    }
+)
 
 
 def homoglyph_wrap(text: str) -> str:
-    """Public helper: re-render a string with confusable code points. Shared with
-    the tests so the exfil payload and the scorer's fold stay in lock-step."""
+    """Public helper: re-render a string with confusable/fullwidth code points.
+    Shared with the tests so the exfil payload and the scorer's fold stay in
+    lock-step. Round-trips exactly through leakgauge.scoring._fold."""
     return text.translate(_HOMOGLYPH_MAP)
 
 

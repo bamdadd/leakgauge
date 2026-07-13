@@ -113,6 +113,18 @@ def test_wrapped_injection_hides_from_keyword_filter() -> None:
     assert "hexadecimal" in decoded
 
 
+def test_homoglyph_wrap_obfuscates_every_canary_letter() -> None:
+    # Guards the case premise ("replace EACH latin letter"): the LKG prefix and
+    # b/f must not survive as ASCII, and the scorer must still fold it back.
+    case = ENCODED_CASES_BY_ID["encoded-homoglyph-token-exfil"]
+    wrapped = homoglyph_wrap(case.canary)
+    for ch in case.canary:
+        if ch.isalpha():
+            assert ch not in wrapped, f"letter {ch!r} left ASCII"
+    record, _env, body = _drive(case, exfil_to=case.exfil_spec.attacker_addresses[0])
+    assert leaked(record, case.canary, case.exfil_spec) is True
+
+
 def test_all_four_encodings_present() -> None:
     encodings = {c.id.split("-")[1] for c in ENCODED_CASES}
     assert encodings == {"base64", "hex", "rot13", "homoglyph"}
