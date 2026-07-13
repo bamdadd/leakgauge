@@ -134,6 +134,6 @@ def test_grabbing_a_decoy_is_hijack_without_leak(case: Case) -> None:
 
 def test_family_membership() -> None:
     assert {c.family for c in ASSEMBLY_CASES} == {"assembly"}
-    assert len(ASSEMBLY_CASES) == 4
-    assert len({c.id for c in ASSEMBLY_CASES}) == 4
-    assert len({c.canary for c in ASSEMBLY_CASES}) == 4
+    assert len(ASSEMBLY_CASES) == 21
+    assert len({c.id for c in ASSEMBLY_CASES}) == len(ASSEMBLY_CASES)  # unique ids
+    assert len({c.canary for c in ASSEMBLY_CASES}) == len(ASSEMBLY_CASES)  # unique canaries

