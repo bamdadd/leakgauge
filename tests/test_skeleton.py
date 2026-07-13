@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from leakgauge.adapters.stub import StubAdapter
 from leakgauge.cases import DELAYED_CASE, build_environment
 from leakgauge.cli import _stub_script, main
@@ -101,5 +103,19 @@ def test_repeats_are_seeded_and_independent() -> None:
     assert all(hijacked(r, DELAYED_CASE.exfil_spec) for r in records)
 
 
-def test_cli_runs_offline_and_returns_zero() -> None:
-    assert main(["--model", "stub:demo", "--suite", "delayed", "--k", "2"]) == 0
+def test_cli_runs_offline_and_returns_zero(tmp_path: Path) -> None:
+    assert (
+        main(
+            [
+                "--model",
+                "stub:demo",
+                "--suite",
+                "delayed",
+                "--k",
+                "2",
+                "--results-dir",
+                str(tmp_path),
+            ]
+        )
+        == 0
+    )
