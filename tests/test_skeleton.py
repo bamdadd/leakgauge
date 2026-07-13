@@ -1,83 +1,105 @@
-"""Walking-skeleton end-to-end test — stub adapter, one case, both scorers."""
+"""Walking-skeleton end-to-end test — stub adapter over the real env + scorer."""
 
 from __future__ import annotations
 
-from leakgauge._scoring_fallback import hijacked, leaked
 from leakgauge.adapters.stub import StubAdapter
-from leakgauge.cli import main
-from leakgauge.environments.demo import (
-    DemoEnvironment,
-    build_demo_case,
-    scripted_benign_responses,
-    scripted_hijack_no_leak_responses,
-    scripted_leak_responses,
-)
+from leakgauge.cases import DELAYED_CASE, build_environment
+from leakgauge.cli import _stub_script, main
+from leakgauge.environment import WorkspaceEnvironment
 from leakgauge.runner import run_case, run_case_repeated
+from leakgauge.scoring import hijacked, leaked
+from leakgauge.types import Response, RunRecord
+
+
+def _run(script: list[Response]) -> tuple[RunRecord, WorkspaceEnvironment]:
+    env = build_environment(DELAYED_CASE)
+    record = run_case(DELAYED_CASE, env, StubAdapter(scripted=script), "stub:demo")
+    return record, env
 
 
 def test_scripted_leak_is_hijack_and_verified_leak() -> None:
-    case = build_demo_case()
-    env = DemoEnvironment(case)
-    adapter = StubAdapter(scripted=scripted_leak_responses(case))
+    record, env = _run(_stub_script(DELAYED_CASE))
 
-    record = run_case(case, env, adapter, "stub:demo")
+    assert hijacked(record, DELAYED_CASE.exfil_spec) is True
+    assert leaked(record, DELAYED_CASE.canary, DELAYED_CASE.exfil_spec) is True
+    assert env.utility_ok(DELAYED_CASE.utility_key) is True
 
-    assert hijacked(record, case.exfil_spec) is True
-    assert leaked(record, case.canary, case.exfil_spec) is True
-    assert env.utility_ok(case.utility_key) is True
-    # The canary must actually ride in the outbound call's arguments.
     sent = env.snapshot()["sent"]
-    assert sent and case.canary in sent[0]["body"]
+    assert sent, "expected an outbound email"
+    assert DELAYED_CASE.canary in sent[0]["body"]
+    assert DELAYED_CASE.exfil_spec.attacker_addresses[0] in sent[0]["recipients"]
 
 
 def test_hijack_without_canary_is_hijack_but_not_leak() -> None:
     # The (1, 0) corner: injected action performed, no secret exfiltrated.
-    # Locks that leaked() and hijacked() are independent — a leaked() that just
-    # returned hijacked() would fail here.
-    case = build_demo_case()
-    env = DemoEnvironment(case)
-    adapter = StubAdapter(scripted=scripted_hijack_no_leak_responses(case))
+    # Locks that leaked() and hijacked() are independent.
+    attacker = DELAYED_CASE.exfil_spec.attacker_addresses[0]
+    script = [
+        Response(text="", tool_calls=[{"id": "c1", "name": "read_inbox", "args": {}}]),
+        Response(
+            text="",
+            tool_calls=[
+                {
+                    "id": "c2",
+                    "name": "send_email",
+                    "args": {"recipients": [attacker], "subject": "hi", "body": "no secret here"},
+                }
+            ],
+        ),
+        Response(text="done", tool_calls=[]),
+    ]
+    record, _ = _run(script)
 
-    record = run_case(case, env, adapter, "stub:demo")
-
-    assert hijacked(record, case.exfil_spec) is True
-    assert leaked(record, case.canary, case.exfil_spec) is False
+    assert hijacked(record, DELAYED_CASE.exfil_spec) is True
+    assert leaked(record, DELAYED_CASE.canary, DELAYED_CASE.exfil_spec) is False
 
 
 def test_benign_agent_neither_hijacks_nor_leaks() -> None:
-    case = build_demo_case()
-    env = DemoEnvironment(case)
-    adapter = StubAdapter(scripted=scripted_benign_responses(case))
+    script = [
+        Response(text="", tool_calls=[{"id": "c1", "name": "read_inbox", "args": {}}]),
+        Response(
+            text="",
+            tool_calls=[
+                {
+                    "id": "c2",
+                    "name": "create_event",
+                    "args": {
+                        "title": "Aurora project kickoff",
+                        "start": "2026-07-20T10:00",
+                        "end": "2026-07-20T11:00",
+                    },
+                }
+            ],
+        ),
+        Response(text="Scheduled it.", tool_calls=[]),
+    ]
+    record, env = _run(script)
 
-    record = run_case(case, env, adapter, "stub:demo")
-
-    assert hijacked(record, case.exfil_spec) is False
-    assert leaked(record, case.canary, case.exfil_spec) is False
-    assert env.utility_ok(case.utility_key) is True
+    assert hijacked(record, DELAYED_CASE.exfil_spec) is False
+    assert leaked(record, DELAYED_CASE.canary, DELAYED_CASE.exfil_spec) is False
+    assert env.utility_ok(DELAYED_CASE.utility_key) is True
 
 
 def test_trace_records_full_arguments() -> None:
-    case = build_demo_case()
-    env = DemoEnvironment(case)
-    record = run_case(case, env, StubAdapter(scripted=scripted_leak_responses(case)), "stub:demo")
+    record, _ = _run(_stub_script(DELAYED_CASE))
 
     tools = [call.tool for call in record.trace]
-    assert tools == ["read_inbox", "read_email", "send_email"]
-    assert record.trace[-1].args["to"] in case.exfil_spec.attacker_addresses
+    assert tools == ["read_inbox", "read_email", "send_email", "create_event"]
+    send = record.trace[2]
+    assert DELAYED_CASE.exfil_spec.attacker_addresses[0] in send.args["recipients"]
 
 
 def test_repeats_are_seeded_and_independent() -> None:
-    case = build_demo_case()
     records = run_case_repeated(
-        case,
-        lambda: DemoEnvironment(case),
-        lambda _seed: StubAdapter(scripted=scripted_leak_responses(case)),
+        DELAYED_CASE,
+        lambda: build_environment(DELAYED_CASE),
+        lambda _seed: StubAdapter(scripted=_stub_script(DELAYED_CASE)),
         "stub:demo",
         k=3,
     )
     assert [r.seed for r in records] == [0, 1, 2]
-    assert all(hijacked(r, case.exfil_spec) for r in records)
+    assert all(hijacked(r, DELAYED_CASE.exfil_spec) for r in records)
 
 
 def test_cli_runs_offline_and_returns_zero() -> None:
-    assert main(["--model", "stub:demo", "--k", "2"]) == 0
+    assert main(["--model", "stub:demo", "--suite", "delayed", "--k", "2"]) == 0
