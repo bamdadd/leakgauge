@@ -117,10 +117,19 @@ def _run(argv: list[str]) -> int:
 def _report(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="leakgauge report")
     parser.add_argument("paths", nargs="+", help="summary json files (results/*.json)")
+    parser.add_argument(
+        "--html", metavar="DIR", help="also render a static leaderboard index.html into DIR"
+    )
     args = parser.parse_args(argv)
 
     summaries = load_summaries(Path(p) for p in args.paths)
-    print(format_reorder_table(summaries, rank_reorder(summaries)))
+    reorder = rank_reorder(summaries)
+    print(format_reorder_table(summaries, reorder))
+    if args.html:
+        from leakgauge.leaderboard import write_site
+
+        path = write_site(summaries, reorder, Path(args.html))
+        print(f"\n  wrote {path}")
     return 0
 
 
