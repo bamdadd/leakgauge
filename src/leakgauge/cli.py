@@ -23,6 +23,7 @@ from leakgauge.runner import DEFAULT_MAX_STEPS
 from leakgauge.suite import (
     DEFAULT_K,
     RESULTS_DIR,
+    cases_for_suite,
     format_reorder_table,
     format_summary_table,
     load_summaries,
@@ -36,6 +37,20 @@ from leakgauge.types import Case, ModelAdapter
 
 # Re-exported so callers/tests have one name for "the offline script for a case".
 _stub_script = stub_script_for
+
+
+def _channel(case: Case) -> str:
+    """Where this case's exfil goes — the attacker address, or egress tool(s)."""
+    if case.exfil_spec.attacker_addresses:
+        return case.exfil_spec.attacker_addresses[0]
+    return ",".join(case.exfil_spec.external_tools) or "-"
+
+
+def _list_cases() -> int:
+    """Print every case (family, id, exfil channel) and exit; no model/network."""
+    for case in sorted(cases_for_suite("all"), key=lambda c: (c.family, c.id)):
+        print(f"{case.family:<9} {case.id:<46} {_channel(case)}")
+    return 0
 
 
 def _adapter_factory(model_id: str) -> Callable[[Case, int], ModelAdapter]:
@@ -52,6 +67,11 @@ def _adapter_factory(model_id: str) -> Callable[[Case, int], ModelAdapter]:
 
 def _run(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="leakgauge")
+    parser.add_argument(
+        "--list-cases",
+        action="store_true",
+        help="print each case (family, id, exfil channel) and exit; no model/network",
+    )
     parser.add_argument("--model", default="stub:demo", help="adapter id, e.g. stub:demo")
     parser.add_argument("--suite", default="all", choices=suite_names(), help="family or 'all'")
     parser.add_argument("--k", type=int, default=DEFAULT_K, help="seeded repeats per case")
@@ -61,6 +81,9 @@ def _run(argv: list[str]) -> int:
         "--results-dir", default=str(RESULTS_DIR), help="where to write <model>.json"
     )
     args = parser.parse_args(argv)
+
+    if args.list_cases:
+        return _list_cases()
 
     summary = run_and_summarise(
         args.suite,
