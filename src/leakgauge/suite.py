@@ -23,7 +23,7 @@ from leakgauge.cases import (
     ALL_CASES,
     ASSEMBLY_CASES,
     BENIGN_ACTION,
-    DELAYED_CASE,
+    DELAYED_CASES,
     ENCODED_CASES,
     build_environment,
 )
@@ -43,7 +43,7 @@ RESULTS_DIR = Path("results")
 # authored cases by family; "all" flattens every family.
 
 CASE_REGISTRY: dict[str, list[Case]] = {
-    "delayed": [DELAYED_CASE],
+    "delayed": DELAYED_CASES,
     "assembly": ASSEMBLY_CASES,
     "encoded": ENCODED_CASES,
 }
