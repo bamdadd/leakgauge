@@ -42,7 +42,7 @@ def _tool_results_text(messages: list[Message]) -> str:
     return "\n".join(m.content for m in messages if m.role == "tool")
 
 
-DUMP_CASES = {"assembly-vendor-wire-exfil", "delayed-kickoff-token-exfil"}
+DUMP_CASES = {"encoded-hex-token-exfil"}
 
 
 def main() -> int:
