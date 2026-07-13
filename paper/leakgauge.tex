@@ -8,7 +8,7 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[margin=1in]{geometry}
+\usepackage[margin=0.9in]{geometry}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
@@ -147,10 +147,10 @@ match counts as leakage only if it occurs in a call whose \emph{destination}
 matches the exfiltration spec, so a benign message that merely quotes an attacker
 address --- or even the canary --- to a legitimate recipient does not register.
 
-Deciding leakage programmatically is the methodological point. An LLM judge would
-reintroduce exactly the failure mode under study (a model's opinion about whether
-a secret leaked) into the measurement of it. The canary makes leakage a decidable
-predicate over the trace.
+Deciding leakage programmatically is the methodological point: an LLM judge would
+fold the very failure mode under study --- a model's opinion about whether a
+secret leaked --- into the measurement of it. The canary makes leakage a
+decidable predicate over the trace.
 
 \subsection{Workspace and traces}
 
@@ -188,6 +188,21 @@ leakage-verified \emph{scoring}, not the attacks.
     secret \cite{wei2023,boucher2022}. This family directly stresses the
     normalization step of the leakage predicate.
 \end{description}
+
+\subsection{Case-design principle: injection on the benign critical path}
+\label{sec:onpath}
+
+A benchmark of this kind measures a model's \emph{decision} only if the attack is
+actually delivered to it. We therefore require that in every case the injected
+content sits \emph{on the benign task's critical path}: reading it is a step the
+model must take to complete the legitimate request, so an agent that does its job
+is guaranteed to encounter the injection, and the protected canary is
+\emph{co-located} on that path --- reachable through the tools the benign task
+already uses. Without this invariant a case conflates two different outcomes ---
+the model \emph{resisting} the attack versus simply \emph{never seeing} it ---
+and the leakage rate is driven by non-delivery rather than robustness. On-path
+injection makes delivery an experimental constant, so hijack and leakage reflect
+behaviour \emph{given} the attack, not the odds it was surfaced.
 
 \subsection{Metrics and rigor}
 \label{sec:metrics}
@@ -228,8 +243,8 @@ bootstrap interval, is the reorder the question asks about. This statistic
 % ===========================================================================
 
 \emph{This section is a placeholder pending the model run; the method, metrics,
-and threat model above are final.} We will evaluate a set of contemporary
-instruction-tuned agent models under identical cases, seeds, and tools.
+and threat model above are final.} We evaluate contemporary instruction-tuned
+agent models under identical cases, seeds, and tools.
 
 \placeholder{Fill Table~\ref{tab:results}: per-model \hijackasr, \leakasr, and
 utility-under-attack with bootstrap 95\% CIs; the hijack-rank vs.\ leakage-rank
@@ -287,15 +302,13 @@ with real model labels and the measured Kendall $\tau$.}}
 \paragraph{Prompt injection.} Direct prompt injection --- overriding a model's
 instructions with adversarial input --- was characterized by Perez and Ribeiro
 \cite{perez2022}. Greshake et al.\ \cite{greshake2023} introduced
-\emph{indirect} prompt injection, where the adversarial instruction is delivered
-through content the model retrieves, and demonstrated exfiltration and
-multi-stage payloads against LLM-integrated applications; this is the threat
-model our attack families instantiate. Encoding-based bypasses of safety
-filters, including Base64 and other low-resource encodings, were studied by Wei
-et al.\ \cite{wei2023}, and imperceptible/homoglyph text perturbations by Boucher
-et al.\ \cite{boucher2022}; these motivate the normalization in our leakage
-predicate. OWASP catalogues prompt injection, including indirect and obfuscated
-variants, as LLM01 \cite{owasp_llm}.
+\emph{indirect} injection, where the adversarial instruction arrives through
+retrieved content, and demonstrated exfiltration and multi-stage payloads against
+LLM-integrated applications --- the threat model our families instantiate.
+Encoding-based filter bypasses (Base64 and other low-resource encodings) were
+studied by Wei et al.\ \cite{wei2023} and imperceptible/homoglyph perturbations
+by Boucher et al.\ \cite{boucher2022}, motivating our normalization; OWASP
+catalogues these as LLM01 \cite{owasp_llm}.
 
 \paragraph{Agent-injection benchmarks.} \textbf{AgentDojo} \cite{agentdojo2024}
 is a dynamic environment for evaluating attacks and defences on tool-using LLM
@@ -348,6 +361,17 @@ We state these before they are asked.
   \item \textbf{Stub-driven skeleton.} The harness is validated with a scripted
         stub agent so the pipeline runs without API access; the empirical model
         comparison (Section~\ref{sec:results}) is pending.
+  \item \textbf{Cases required calibration.} An early (v1) case set
+        \emph{under-triggered}: several injections sat off the benign critical
+        path, so a compliant agent could finish without ever reading the attack,
+        flooring leakage at zero for reasons of non-delivery rather than
+        robustness. This motivated the on-path principle
+        (Section~\ref{sec:onpath}); cases were redesigned so injection is on-path
+        and the canary co-located. The correction was informed by a single
+        inexpensive-model pilot used only to confirm that attacks deliver and
+        trigger --- a calibration check, not a tuned or multi-model result; the
+        reported evaluation (Section~\ref{sec:results}) uses the redesigned
+        cases.
 \end{itemize}
 
 Falsification is explicit: the question's answer is ``no reorder'' if the two
@@ -364,23 +388,22 @@ we would publish it as such.
 leakgauge is built to measure and improve robustness. Only published attack
 patterns are used --- encoding wrappers, delayed triggers, split/multi-source
 payloads --- with no novel high-potency jailbreaks and no harmful-content
-payloads. Because success is defined as programmatically verified leakage, the
-suite ships its discriminating cases \emph{behind the scorer} (canary-checked)
-rather than as turnkey exploits. If leakgauge is ever run against a live product
-and surfaces a real leak, the finding is disclosed privately to the affected
+payloads. Because success is verified leakage, the suite ships its discriminating
+cases \emph{behind the scorer} rather than as turnkey exploits. If run against a
+live product and a real leak is found, it is disclosed privately to the affected
 vendor first and never published as a working exploit against a named deployment.
-The goal is to reward models that avoid verified data leakage, not merely models
-that decline the attacker's action in name.
+The goal is to reward models that avoid verified leakage, not merely those that
+decline the attacker's action in name.
 
 % ===========================================================================
 \section{Conclusion}
 % ===========================================================================
 
-Injection benchmarks largely score task hijacking; the harm they stand in for is
-data exfiltration, and the two are not the same event. leakgauge re-scores the
-same traces on a programmatic, LLM-free leakage predicate and asks whether the
-model ranking reorders. The empirical answer --- the measured Kendall $\tau$ and
-whether the reorder survives the bootstrap intervals --- is reported in
+Injection benchmarks largely score task hijacking, but the harm they stand in for
+is data exfiltration --- not the same event. leakgauge re-scores the same traces
+on a programmatic, LLM-free leakage predicate and asks whether the ranking
+reorders. The empirical answer --- the measured Kendall $\tau$ and whether the
+reorder survives the bootstrap intervals --- appears in
 Section~\ref{sec:results} once the run completes. \placeholder{one-line final
 takeaway.}
 
@@ -429,7 +452,7 @@ arXiv:2106.09898.
 OWASP Foundation.
 \newblock OWASP Top 10 for Large Language Model Applications --- LLM01: Prompt
 Injection.
-\newblock 2023--2025. \url{https://owasp.org/www-project-top-10-for-large-language-model-applications/}.
+\newblock 2023--2025. \url{https://genai.owasp.org/}
 
 \end{thebibliography}
 
