@@ -33,6 +33,11 @@ python_version = "3.11"
 strict = true
 files = ["src"]
 
+# Optional provider SDKs are not installed in CI; the stub path needs neither.
+[[tool.mypy.overrides]]
+module = ["anthropic.*", "openai.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]

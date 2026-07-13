@@ -95,5 +95,7 @@ class ModelAdapter(Protocol):
 
 
 def get_adapter(model_id: str) -> ModelAdapter:   # "anthropic:foo" -> adapter
-    """Return the adapter for a ``provider:model`` id. Implemented in phase 2."""
-    raise NotImplementedError
+    """Return the adapter for a ``provider:model`` id (see ``leakgauge.adapters``)."""
+    from leakgauge.adapters import get_adapter as _get_adapter
+
+    return _get_adapter(model_id)
