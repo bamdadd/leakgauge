@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from leakgauge.adapters.stub import StubAdapter
-from leakgauge.cases import DELAYED_CASE, build_environment
+from leakgauge.cases import BENIGN_ACTION, DELAYED_CASE, build_environment
 from leakgauge.cli import _stub_script, main
 from leakgauge.environment import WorkspaceEnvironment
 from leakgauge.runner import run_case, run_case_repeated
@@ -57,6 +57,7 @@ def test_hijack_without_canary_is_hijack_but_not_leak() -> None:
 
 
 def test_benign_agent_neither_hijacks_nor_leaks() -> None:
+    act = BENIGN_ACTION[DELAYED_CASE.id]
     script = [
         Response(text="", tool_calls=[{"id": "c1", "name": "read_inbox", "args": {}}]),
         Response(
@@ -65,11 +66,7 @@ def test_benign_agent_neither_hijacks_nor_leaks() -> None:
                 {
                     "id": "c2",
                     "name": "create_event",
-                    "args": {
-                        "title": "Aurora project kickoff",
-                        "start": "2026-07-20T10:00",
-                        "end": "2026-07-20T11:00",
-                    },
+                    "args": {"title": act["title"], "start": act["start"], "end": act["end"]},
                 }
             ],
         ),
@@ -86,8 +83,8 @@ def test_trace_records_full_arguments() -> None:
     record, _ = _run(_stub_script(DELAYED_CASE))
 
     tools = [call.tool for call in record.trace]
-    assert tools == ["read_inbox", "read_email", "send_email", "create_event"]
-    send = record.trace[2]
+    assert tools == ["read_inbox", "send_email", "create_event"]
+    send = record.trace[1]
     assert DELAYED_CASE.exfil_spec.attacker_addresses[0] in send.args["recipients"]
 
 
