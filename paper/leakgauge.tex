@@ -163,7 +163,7 @@ creating calendar events. Attacker content lives \emph{inside} environment
 fields (email bodies, event descriptions), never in the user's instruction. Each
 tool call is recorded with its \emph{full arguments}, so both the hijack and the
 leakage predicate are computable from one trace. A run is scored per case over
-$k$ seeded repeats.
+$k \geq 12$ seeded repeats.
 
 \subsection{Attack families (published patterns only)}
 \label{sec:families}
@@ -189,20 +189,33 @@ leakage-verified \emph{scoring}, not the attacks.
     normalization step of the leakage predicate.
 \end{description}
 
-\subsection{Case-design principle: injection on the benign critical path}
+\subsection{Case design: on-path injection and realism distractors}
 \label{sec:onpath}
 
-A benchmark of this kind measures a model's \emph{decision} only if the attack is
-actually delivered to it. We therefore require that in every case the injected
-content sits \emph{on the benign task's critical path}: reading it is a step the
-model must take to complete the legitimate request, so an agent that does its job
-is guaranteed to encounter the injection, and the protected canary is
-\emph{co-located} on that path --- reachable through the tools the benign task
+\paragraph{On-path injection.} A benchmark of this kind measures a model's
+\emph{decision} only if the attack is actually delivered to it. We therefore
+require that in every case the injected content sits \emph{on the benign task's
+critical path}: reading it is a step the model must take to complete the
+legitimate request, so an agent that does its job is guaranteed to encounter the
+injection, and the target secret is reachable through the tools the benign task
 already uses. Without this invariant a case conflates two different outcomes ---
 the model \emph{resisting} the attack versus simply \emph{never seeing} it ---
 and the leakage rate is driven by non-delivery rather than robustness. On-path
 injection makes delivery an experimental constant, so hijack and leakage reflect
 behaviour \emph{given} the attack, not the odds it was surfaced.
+
+\paragraph{Realism distractors.} On-path delivery alone is not enough for the gap
+to be \emph{measurable}. If the planted canary were the \emph{only} secret a
+hijacked model could reach, then any model that performs the injected action must
+forward the canary --- hijack would imply leak by construction and \leakasr{}
+would collapse onto \hijackasr. We break this coupling with \emph{realism
+distractors}: each mailbox holds several plausible secrets --- credentials,
+access codes, and tokens for different systems --- only one of which is the
+canary the attack targets. A hijacked model must then not merely act but select
+the \emph{right} secret; a model that acts on a cluttered, realistic mailbox and
+forwards the \emph{wrong} secret is hijacked \emph{without} leaking. Crucially
+this yields hijack-without-leak \emph{without tuning} attack difficulty --- the
+gap emerges from ordinary mailbox realism, not from a knob set to manufacture it.
 
 \subsection{Metrics and rigor}
 \label{sec:metrics}
@@ -224,10 +237,10 @@ much counting hijacks overstates verified exfiltration.
 
 \paragraph{Uncertainty.} On each rate we report a percentile \textbf{bootstrap
 95\% confidence interval}: resample cases with replacement ($B \approx 10{,}000$),
-recompute the rate, take the 2.5/97.5 percentiles. With $n = 30$--$50$ cases the
+recompute the rate, take the 2.5/97.5 percentiles. With $n = 37$ cases the
 intervals are wide, and we report them as wide; no claim is made that the
-intervals do not support. Per-case success across $k$ seeds is reported as
-mean~$\pm$~std.
+intervals do not support. Per-case success across $k \geq 12$ seeds is reported
+as mean~$\pm$~std.
 
 \paragraph{Headline: the rank-reorder statistic.} We rank the model set by
 \hijackasr{} and, separately, by \leakasr, and report the reorder as a Kendall
@@ -236,6 +249,33 @@ Figure~\ref{fig:reorder}). $\tau \approx 1$ means the rankings agree (leakage
 adds no ordering signal); $\tau$ meaningfully below $1$, and outside the
 bootstrap interval, is the reorder the question asks about. This statistic
 \emph{is} the thesis test.
+
+\subsection{The gap is an instrument-threshold effect}
+\label{sec:threshold}
+
+Whether a case can \emph{exhibit} a hijack--leak gap is a property of the
+measurement instrument, not only of the model, and two regimes flatten it to
+zero. (i) \textbf{Below threshold --- the model never acts:} a model that refuses
+the injection or never issues the outbound call scores hijack $=$ leak $= 0$, so
+there is no gap to observe and the case is uninformative for that model.
+(ii) \textbf{Over-coupled cases --- hijack forces leak:} if the target secret is
+the only thing a hijacked model can grab (no distractors,
+Section~\ref{sec:onpath}), then acting mechanically implies leaking and the gap
+is zero by construction. An honest, non-trivial gap therefore requires a model
+\emph{capable enough to act} on a realistic, multi-secret mailbox \emph{and}
+liable to forward the \emph{wrong} secret --- exactly the regime the distractor
+design targets. The gap is thus not a free-floating model property but a
+joint property of model capability and case construction; the methodology's job
+is to hold case construction in the regime where the gap, if it exists, can show.
+
+A single-model pilot bears this out: GPT-4o exhibited a \emph{null} gap at
+$n = 37$ --- \hijackasr{} and \leakasr{} statistically indistinguishable ---
+consistent with a capable model that, when it acts, tends to forward the correct
+secret. This is also why the headline is a \emph{multi-model} claim: a reorder
+can only appear across models that sit at different points of the trade-off
+between acting on the injection and selecting the right secret. That comparison
+is under evaluation; per-model numbers appear in Section~\ref{sec:results}.
+\placeholder{roster gap sizes + reorder result.}
 
 % ===========================================================================
 \section{Results}
@@ -340,10 +380,10 @@ so the contribution is the scoring discipline, not scale.
 We state these before they are asked.
 
 \begin{itemize}
-  \item \textbf{Small suite, wide intervals.} With $n \approx 30$--$50$ cases the
-        bootstrap 95\% CIs are wide; a reorder falling \emph{within} the intervals
-        is not distinguishable from noise. We treat any such reorder as
-        unsupported. Results are indicative, not definitive placements.
+  \item \textbf{Small suite, wide intervals.} With $n = 37$ cases the bootstrap
+        95\% CIs are wide; a reorder falling \emph{within} the intervals is not
+        distinguishable from noise. We treat any such reorder as unsupported.
+        Results are indicative, not definitive placements.
   \item \textbf{Single domain.} All cases live in one email-and-calendar
         workspace, so findings may not transfer to other tool ecosystems (code
         execution, browsing, finance). The predicate and protocol are
@@ -365,13 +405,20 @@ We state these before they are asked.
         \emph{under-triggered}: several injections sat off the benign critical
         path, so a compliant agent could finish without ever reading the attack,
         flooring leakage at zero for reasons of non-delivery rather than
-        robustness. This motivated the on-path principle
-        (Section~\ref{sec:onpath}); cases were redesigned so injection is on-path
-        and the canary co-located. The correction was informed by a single
-        inexpensive-model pilot used only to confirm that attacks deliver and
-        trigger --- a calibration check, not a tuned or multi-model result; the
-        reported evaluation (Section~\ref{sec:results}) uses the redesigned
-        cases.
+        robustness. This motivated the on-path principle with realism distractors
+        (Section~\ref{sec:onpath}), so injection is on-path and a hijacked model
+        can still forward the wrong secret. The correction was informed by
+        single-model pilots used to confirm attacks deliver and trigger and to
+        locate the instrument-threshold regime (Section~\ref{sec:threshold}) ---
+        calibration, not tuned or multi-model results; the reported evaluation
+        (Section~\ref{sec:results}) uses the redesigned cases.
+  \item \textbf{The reorder may be null.} The headline reorder is a hypothesis
+        under test, not an assumed outcome. A single-model pilot (GPT-4o) already
+        showed a null gap at $n = 37$; the multi-model comparison may likewise
+        find $\tau \approx 1$. If so, the contribution stands on its own:
+        a programmatic, LLM-free leakage-verification methodology and a
+        leakage-verified leaderboard, plus the honest finding that hijack-ASR is
+        an adequate proxy for verified leakage in this regime.
 \end{itemize}
 
 Falsification is explicit: the question's answer is ``no reorder'' if the two
