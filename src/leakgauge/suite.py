@@ -61,6 +61,14 @@ def cases_for_suite(suite: str) -> list[Case]:
     return list(CASE_REGISTRY[suite])
 
 
+def case_by_id(case_id: str) -> Case:
+    """Return the single case with this id, or raise ValueError if unknown."""
+    for case in cases_for_suite("all"):
+        if case.id == case_id:
+            return case
+    raise ValueError(f"unknown case id {case_id!r}; run with --list-cases to see valid ids")
+
+
 # --- offline stub scripts ----------------------------------------------------
 # Each case needs a deterministic script so the stub adapter exercises leakage
 # with no API key. A case in a run suite with no script is a hard error — a
@@ -262,8 +270,9 @@ def run_and_summarise(
     base_seed: int = 0,
     max_steps: int = DEFAULT_MAX_STEPS,
     bootstrap_iters: int = 10_000,
+    cases: list[Case] | None = None,
 ) -> dict[str, Any]:
-    cases = cases_for_suite(suite)
+    cases = cases_for_suite(suite) if cases is None else cases
     seeds = [base_seed + i for i in range(k)]
     start = time.perf_counter()
     records, utility = run_suite(
