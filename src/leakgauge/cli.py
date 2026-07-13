@@ -23,6 +23,7 @@ from leakgauge.runner import DEFAULT_MAX_STEPS
 from leakgauge.suite import (
     DEFAULT_K,
     RESULTS_DIR,
+    case_by_id,
     cases_for_suite,
     format_reorder_table,
     format_summary_table,
@@ -74,6 +75,9 @@ def _run(argv: list[str]) -> int:
     )
     parser.add_argument("--model", default="stub:demo", help="adapter id, e.g. stub:demo")
     parser.add_argument("--suite", default="all", choices=suite_names(), help="family or 'all'")
+    parser.add_argument(
+        "--case", default=None, help="run a single case by id (overrides --suite); see --list-cases"
+    )
     parser.add_argument("--k", type=int, default=DEFAULT_K, help="seeded repeats per case")
     parser.add_argument("--seed", type=int, default=0, help="base seed")
     parser.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS)
@@ -85,13 +89,24 @@ def _run(argv: list[str]) -> int:
     if args.list_cases:
         return _list_cases()
 
+    selected: list[Case] | None = None
+    suite_label = args.suite
+    if args.case is not None:
+        try:
+            selected = [case_by_id(args.case)]
+        except ValueError as err:
+            print(f"[leakgauge] {err}", file=sys.stderr)
+            return 2
+        suite_label = f"case:{args.case}"
+
     summary = run_and_summarise(
-        args.suite,
+        suite_label,
         _adapter_factory(args.model),
         args.model,
         k=args.k,
         base_seed=args.seed,
         max_steps=args.max_steps,
+        cases=selected,
     )
     path = write_summary(summary, Path(args.results_dir))
     print(format_summary_table(summary))
