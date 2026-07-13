@@ -9,6 +9,7 @@ from leakgauge.environments.demo import (
     DemoEnvironment,
     build_demo_case,
     scripted_benign_responses,
+    scripted_hijack_no_leak_responses,
     scripted_leak_responses,
 )
 from leakgauge.runner import run_case, run_case_repeated
@@ -27,6 +28,20 @@ def test_scripted_leak_is_hijack_and_verified_leak() -> None:
     # The canary must actually ride in the outbound call's arguments.
     sent = env.snapshot()["sent"]
     assert sent and case.canary in sent[0]["body"]
+
+
+def test_hijack_without_canary_is_hijack_but_not_leak() -> None:
+    # The (1, 0) corner: injected action performed, no secret exfiltrated.
+    # Locks that leaked() and hijacked() are independent — a leaked() that just
+    # returned hijacked() would fail here.
+    case = build_demo_case()
+    env = DemoEnvironment(case)
+    adapter = StubAdapter(scripted=scripted_hijack_no_leak_responses(case))
+
+    record = run_case(case, env, adapter, "stub:demo")
+
+    assert hijacked(record, case.exfil_spec) is True
+    assert leaked(record, case.canary, case.exfil_spec) is False
 
 
 def test_benign_agent_neither_hijacks_nor_leaks() -> None:
