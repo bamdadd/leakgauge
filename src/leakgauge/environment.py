@@ -1,0 +1,263 @@
+"""A light email+calendar workspace environment implementing the frozen
+``Environment`` Protocol from ``leakgauge.types``.
+
+The schema shape (inbox / sent / contacts / calendar) mirrors AgentDojo's
+``WorkspaceEnvironment`` so cases and defences can port, but this is a
+self-contained ~zero-dependency implementation — we do not depend on agentdojo.
+See docs/CONTRACTS.md §3.
+
+Tools mutate the workspace state and append a ``ToolCall`` to ``self.trace``; the
+harness reads ``self.trace`` after a run to build a ``RunRecord``. Attacker /
+injected content lives inside environment fields (email bodies), never in the
+user task.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from copy import deepcopy
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
+from .types import ToolCall, ToolSpec
+
+# --- workspace state model (mirrors AgentDojo's field shapes, lightweight) ---
+
+
+@dataclass
+class Email:
+    id: str
+    sender: str
+    recipients: list[str]
+    subject: str
+    body: str
+    cc: list[str] = field(default_factory=list)
+    bcc: list[str] = field(default_factory=list)
+    read: bool = False
+    timestamp: str = ""
+
+
+@dataclass
+class Contact:
+    name: str
+    email: str
+
+
+@dataclass
+class Event:
+    id: str
+    title: str
+    start: str
+    end: str
+    description: str = ""
+    participants: list[str] = field(default_factory=list)
+    location: str = ""
+
+
+def _emails_from_seed(rows: list[dict[str, Any]]) -> list[Email]:
+    return [Email(**row) for row in rows]
+
+
+def _contacts_from_seed(rows: list[dict[str, Any]]) -> list[Contact]:
+    return [Contact(**row) for row in rows]
+
+
+def _events_from_seed(rows: list[dict[str, Any]]) -> list[Event]:
+    return [Event(**row) for row in rows]
+
+
+# --- utility checks registry -------------------------------------------------
+#
+# A case names its programmatic utility check by string key (Case.utility_key).
+# Each check answers "did the benign task complete?" by inspecting env state —
+# never LLM-judged. Register new checks here as cases are authored.
+
+UtilityCheck = Callable[["WorkspaceEnvironment"], bool]
+UTILITY_CHECKS: dict[str, UtilityCheck] = {}
+
+
+def register_utility(key: str) -> Callable[[UtilityCheck], UtilityCheck]:
+    def deco(fn: UtilityCheck) -> UtilityCheck:
+        UTILITY_CHECKS[key] = fn
+        return fn
+
+    return deco
+
+
+class WorkspaceEnvironment:
+    """Mutable email+calendar workspace. Implements ``Environment`` (Protocol)."""
+
+    def __init__(self, env_seed: dict[str, Any]) -> None:
+        self.account_email: str = env_seed.get("account_email", "user@example.com")
+        self.inbox: list[Email] = _emails_from_seed(env_seed.get("inbox", []))
+        self.sent: list[Email] = _emails_from_seed(env_seed.get("sent", []))
+        self.contacts: list[Contact] = _contacts_from_seed(env_seed.get("contacts", []))
+        self.events: list[Event] = _events_from_seed(env_seed.get("events", []))
+        self.trace: list[ToolCall] = []
+        self._counter: int = 0
+
+    # -- Protocol: tools() ----------------------------------------------------
+
+    def tools(self) -> list[ToolSpec]:
+        return _TOOL_SPECS
+
+    # -- Protocol: call() -----------------------------------------------------
+
+    def call(self, name: str, args: dict[str, Any]) -> Any:
+        impl = _TOOL_IMPLS.get(name)
+        if impl is None:
+            result: Any = {"error": f"unknown tool: {name}"}
+        else:
+            result = impl(self, args)
+        self.trace.append(
+            ToolCall(step=len(self.trace), tool=name, args=deepcopy(args), result=result)
+        )
+        return result
+
+    # -- Protocol: utility_ok() ----------------------------------------------
+
+    def utility_ok(self, key: str) -> bool:
+        check = UTILITY_CHECKS.get(key)
+        if check is None:
+            raise KeyError(f"no utility check registered for key: {key!r}")
+        return check(self)
+
+    # -- Protocol: snapshot() -------------------------------------------------
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "account_email": self.account_email,
+            "inbox": [asdict(e) for e in self.inbox],
+            "sent": [asdict(e) for e in self.sent],
+            "contacts": [asdict(c) for c in self.contacts],
+            "events": [asdict(ev) for ev in self.events],
+        }
+
+    # -- internal helpers -----------------------------------------------------
+
+    def _next_id(self, prefix: str) -> str:
+        self._counter += 1
+        return f"{prefix}-{self._counter}"
+
+
+# --- tool implementations ----------------------------------------------------
+#
+# Each takes (env, args) and returns a JSON-serialisable result. Read tools do
+# not mutate (aside from marking emails read); write tools mutate state.
+
+
+def _tool_read_inbox(env: WorkspaceEnvironment, args: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"id": e.id, "sender": e.sender, "subject": e.subject, "read": e.read}
+        for e in env.inbox
+    ]
+
+
+def _tool_read_email(env: WorkspaceEnvironment, args: dict[str, Any]) -> dict[str, Any]:
+    email_id = args.get("email_id")
+    for e in env.inbox:
+        if e.id == email_id:
+            e.read = True
+            return asdict(e)
+    return {"error": f"no email with id {email_id!r}"}
+
+
+def _tool_search_emails(env: WorkspaceEnvironment, args: dict[str, Any]) -> list[dict[str, Any]]:
+    query = str(args.get("query", "")).lower()
+    hits = [e for e in env.inbox if query in e.subject.lower() or query in e.body.lower()]
+    return [asdict(e) for e in hits]
+
+
+def _tool_send_email(env: WorkspaceEnvironment, args: dict[str, Any]) -> dict[str, Any]:
+    recipients = args.get("recipients") or []
+    if isinstance(recipients, str):
+        recipients = [recipients]
+    email = Email(
+        id=env._next_id("sent"),
+        sender=env.account_email,
+        recipients=list(recipients),
+        subject=str(args.get("subject", "")),
+        body=str(args.get("body", "")),
+        cc=list(args.get("cc") or []),
+        bcc=list(args.get("bcc") or []),
+    )
+    env.sent.append(email)
+    return {"status": "sent", "id": email.id, "recipients": email.recipients}
+
+
+def _tool_search_contacts(env: WorkspaceEnvironment, args: dict[str, Any]) -> list[dict[str, Any]]:
+    query = str(args.get("query", "")).lower()
+    hits = [c for c in env.contacts if query in c.name.lower() or query in c.email.lower()]
+    return [asdict(c) for c in hits]
+
+
+def _tool_list_events(env: WorkspaceEnvironment, args: dict[str, Any]) -> list[dict[str, Any]]:
+    return [asdict(ev) for ev in env.events]
+
+
+def _tool_create_event(env: WorkspaceEnvironment, args: dict[str, Any]) -> dict[str, Any]:
+    event = Event(
+        id=env._next_id("evt"),
+        title=str(args.get("title", "")),
+        start=str(args.get("start", "")),
+        end=str(args.get("end", "")),
+        description=str(args.get("description", "")),
+        participants=list(args.get("participants") or []),
+        location=str(args.get("location", "")),
+    )
+    env.events.append(event)
+    return {"status": "created", "id": event.id}
+
+
+def _tool_read_event(env: WorkspaceEnvironment, args: dict[str, Any]) -> dict[str, Any]:
+    event_id = args.get("event_id")
+    for ev in env.events:
+        if ev.id == event_id:
+            return asdict(ev)
+    return {"error": f"no event with id {event_id!r}"}
+
+
+ToolImpl = Callable[[WorkspaceEnvironment, dict[str, Any]], Any]
+
+_TOOL_IMPLS: dict[str, ToolImpl] = {
+    "read_inbox": _tool_read_inbox,
+    "read_email": _tool_read_email,
+    "search_emails": _tool_search_emails,
+    "send_email": _tool_send_email,
+    "search_contacts": _tool_search_contacts,
+    "list_events": _tool_list_events,
+    "create_event": _tool_create_event,
+    "read_event": _tool_read_event,
+}
+
+
+def _spec(name: str, description: str, properties: dict[str, Any], required: list[str]) -> ToolSpec:
+    return ToolSpec(
+        name=name,
+        description=description,
+        parameters={"type": "object", "properties": properties, "required": required},
+    )
+
+
+_STR = {"type": "string"}
+_STR_ARRAY = {"type": "array", "items": {"type": "string"}}
+
+_TOOL_SPECS: list[ToolSpec] = [
+    _spec("read_inbox", "List emails in the inbox (id, sender, subject, read flag).", {}, []),
+    _spec("read_email", "Read one email's full contents by id; marks it read.",
+          {"email_id": _STR}, ["email_id"]),
+    _spec("search_emails", "Search inbox emails whose subject or body contains the query.",
+          {"query": _STR}, ["query"]),
+    _spec("send_email", "Send an email to one or more recipients.",
+          {"recipients": _STR_ARRAY, "subject": _STR, "body": _STR,
+           "cc": _STR_ARRAY, "bcc": _STR_ARRAY}, ["recipients", "subject", "body"]),
+    _spec("search_contacts", "Search contacts by name or email address.",
+          {"query": _STR}, ["query"]),
+    _spec("list_events", "List all calendar events.", {}, []),
+    _spec("create_event", "Create a calendar event.",
+          {"title": _STR, "start": _STR, "end": _STR, "description": _STR,
+           "participants": _STR_ARRAY, "location": _STR},
+          ["title", "start", "end"]),
+    _spec("read_event", "Read one calendar event by id.",
+          {"event_id": _STR}, ["event_id"]),
+]
