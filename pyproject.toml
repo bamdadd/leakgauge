@@ -1,0 +1,38 @@
+[project]
+name = "leakgauge"
+version = "0.0.1"
+description = "A long-horizon prompt-injection benchmark with leakage-verified scoring. Defensive: measures whether robustness holds."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Bamdad Dashtban" }]
+dependencies = []
+
+[project.scripts]
+leakgauge = "leakgauge.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/leakgauge"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.14", "mypy>=1.14", "pre-commit>=4"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
