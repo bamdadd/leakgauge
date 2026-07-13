@@ -43,10 +43,14 @@ def run_case(
     ]
     trace: list[ToolCall] = []
     final_text = ""
+    tokens_in = 0
+    tokens_out = 0
 
     for step in range(max_steps):
         response = adapter.complete(messages, env.tools())
         final_text = response.text
+        tokens_in += response.tokens_in
+        tokens_out += response.tokens_out
         if not response.tool_calls:
             break
         messages.append(
@@ -67,6 +71,8 @@ def run_case(
         seed=seed,
         trace=trace,
         final_text=final_text,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
     )
 
 

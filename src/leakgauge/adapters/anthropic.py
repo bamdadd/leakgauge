@@ -78,4 +78,10 @@ class AnthropicAdapter:
                 text_parts.append(block.text)
             elif block.type == "tool_use":
                 tool_calls.append({"id": block.id, "name": block.name, "args": dict(block.input)})
-        return Response(text="".join(text_parts), tool_calls=tool_calls)
+        usage = message.usage
+        return Response(
+            text="".join(text_parts),
+            tool_calls=tool_calls,
+            tokens_in=getattr(usage, "input_tokens", 0) or 0,
+            tokens_out=getattr(usage, "output_tokens", 0) or 0,
+        )

@@ -53,7 +53,12 @@ class RunRecord:
     seed: int
     trace: list[ToolCall]     # ordered tool calls
     final_text: str           # model's final assistant message
+    tokens_in: int = 0        # prompt tokens summed over the run (0 for stub)
+    tokens_out: int = 0       # completion tokens summed over the run
 ```
+
+The two token fields are optional (default 0) and additive — added for cost
+accounting; scoring ignores them, stub runs leave them 0.
 
 ## 2. Case schema
 
@@ -122,6 +127,8 @@ class Message:
 class Response:
     text: str
     tool_calls: list[dict]    # [{"id", "name", "args"}], empty if none
+    tokens_in: int = 0        # prompt tokens for this completion (0 if unknown)
+    tokens_out: int = 0       # completion tokens for this completion
 
 class ModelAdapter(Protocol):
     def complete(

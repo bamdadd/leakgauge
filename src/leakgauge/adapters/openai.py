@@ -66,7 +66,13 @@ class OpenAIAdapter:
                     "args": json.loads(call.function.arguments or "{}"),
                 }
             )
-        return Response(text=choice.content or "", tool_calls=tool_calls)
+        usage = completion.usage
+        return Response(
+            text=choice.content or "",
+            tool_calls=tool_calls,
+            tokens_in=getattr(usage, "prompt_tokens", 0) or 0,
+            tokens_out=getattr(usage, "completion_tokens", 0) or 0,
+        )
 
 
 def _base_url_from_env(var: str) -> str | None:

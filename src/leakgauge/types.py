@@ -28,6 +28,8 @@ class RunRecord:
     seed: int
     trace: list[ToolCall]  # ordered tool calls
     final_text: str  # model's final assistant message
+    tokens_in: int = 0  # prompt tokens summed over the run (0 for stub)
+    tokens_out: int = 0  # completion tokens summed over the run
 
 
 # --- 2. Case schema (authored data on disk, loaded into these types) ---
@@ -86,6 +88,8 @@ class Message:
 class Response:
     text: str
     tool_calls: list[dict[str, Any]]  # [{"id", "name", "args"}], empty if none
+    tokens_in: int = 0  # prompt tokens for this completion (0 if unknown)
+    tokens_out: int = 0  # completion tokens for this completion
 
 
 class ModelAdapter(Protocol):
