@@ -27,6 +27,7 @@ from leakgauge.cases import (
     ENCODED_CASES,
     build_environment,
 )
+from leakgauge.pricing import cost_usd, price_for
 from leakgauge.runner import DEFAULT_MAX_STEPS, run_case
 from leakgauge.scoring import ModelReport, RankReorder, RateCI, _rank_reorder, compute_report
 from leakgauge.types import Case, ModelAdapter, Response, RunRecord
@@ -209,6 +210,10 @@ def build_summary(
             }
         )
 
+    tokens_in = sum(r.tokens_in for r in records)
+    tokens_out = sum(r.tokens_out for r in records)
+    price = price_for(model_id)
+
     return {
         "schema_version": SCHEMA_VERSION,
         "model": model_id,
@@ -221,6 +226,14 @@ def build_summary(
             "hijack_asr": _rate(model.hijack),
             "leakage_asr": _rate(model.leakage),
             "utility_under_attack": _rate(model.utility) if model.utility else None,
+        },
+        "cost": {
+            "tokens_in": tokens_in,
+            "tokens_out": tokens_out,
+            "spend_usd": round(cost_usd(model_id, tokens_in, tokens_out), 6),
+            "priced": price is not None,
+            "usd_per_1m_in": price.usd_per_1m_in if price else None,
+            "usd_per_1m_out": price.usd_per_1m_out if price else None,
         },
         "cases": rows,
     }
@@ -296,7 +309,18 @@ def format_summary_table(summary: dict[str, Any]) -> str:
         lines.append(f"    utility-under-attack : {_ci(agg['utility_under_attack'])}")
     if summary["n_cases"] < 2:
         lines.append("    (n_cases<2 — CI is degenerate; add cases for a meaningful interval)")
+    cost = summary["cost"]
+    unpriced = "" if cost["priced"] else " (unpriced model — $0)"
+    lines.append(
+        f"  spend: {_fmt_usd(cost['spend_usd'])} "
+        f"({cost['tokens_in']} in / {cost['tokens_out']} out tokens){unpriced}"
+    )
     return "\n".join(lines)
+
+
+def _fmt_usd(amount: float) -> str:
+    # Two decimals normally; extra precision for sub-cent pilot runs.
+    return f"${amount:,.2f}" if amount == 0 or amount >= 0.01 else f"${amount:.4f}"
 
 
 def _pm(mean: float, std: float) -> str:
