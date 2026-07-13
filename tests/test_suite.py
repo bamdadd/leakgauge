@@ -8,7 +8,10 @@ from typing import Any
 
 import pytest
 
+from leakgauge.adapters.stub import StubAdapter
+from leakgauge.cases import DELAYED_CASE, build_environment
 from leakgauge.cli import _adapter_factory, main
+from leakgauge.runner import run_case
 from leakgauge.suite import (
     SCHEMA_VERSION,
     cases_for_suite,
@@ -18,7 +21,7 @@ from leakgauge.suite import (
     stub_script_for,
     write_summary,
 )
-from leakgauge.types import Case, ExfilSpec
+from leakgauge.types import Case, ExfilSpec, Response
 
 _STUB = _adapter_factory("stub:demo")
 
@@ -48,6 +51,31 @@ def test_run_and_summarise_shape_and_rates() -> None:
     assert row["hijack_mean"] == 1.0 and row["hijack_std"] == 0.0
     assert row["leakage_mean"] == 1.0
     assert row["n"] == 3
+
+
+def test_stub_run_has_zero_cost_block() -> None:
+    cost = _summary(k=1)["cost"]
+    assert cost["tokens_in"] == 0
+    assert cost["tokens_out"] == 0
+    assert cost["spend_usd"] == 0.0
+    assert cost["priced"] is False  # stub is unpriced
+
+
+def test_runner_accumulates_response_tokens() -> None:
+    # Token capture rides on the Response path; the runner sums per completion.
+    script = [
+        Response(
+            text="",
+            tool_calls=[{"id": "c1", "name": "read_inbox", "args": {}}],
+            tokens_in=100,
+            tokens_out=10,
+        ),
+        Response(text="done", tool_calls=[], tokens_in=50, tokens_out=5),
+    ]
+    env = build_environment(DELAYED_CASE)
+    record = run_case(DELAYED_CASE, env, StubAdapter(scripted=script), "stub:demo")
+    assert record.tokens_in == 150
+    assert record.tokens_out == 15
 
 
 def test_write_summary_is_tracked_json_and_roundtrips(tmp_path: Path) -> None:
