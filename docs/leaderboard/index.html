@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>leakgauge — leakage-verified injection leaderboard</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.5;
+  max-width: 960px; margin: 0 auto; padding: 24px; color: #111827; background: #fff; }
+a { color: #2563eb; }
+.banner { border: 1px solid #d1d5db; border-left: 4px solid #059669; background: #f0fdf4;
+  padding: 12px 16px; border-radius: 8px; font-size: 0.95rem; margin-bottom: 24px; }
+h1 { margin: 0 0 4px; font-size: 1.9rem; }
+.sub { color: #6b7280; margin: 0 0 28px; }
+.figure { border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px 16px; margin: 8px 0 12px; }
+.reorder .svg-title { font-size: 20px; font-weight: 700; fill: #111827; }
+.reorder .svg-tau { font-size: 15px; fill: #374151; }
+.reorder .svg-cross { font-size: 13px; font-weight: 600; fill: #b45309; }
+.reorder .svg-col { font-size: 13px; font-weight: 600; fill: #6b7280; letter-spacing: .02em; }
+.reorder .svg-lab { font-size: 14px; fill: #111827; }
+.reorder .svg-note { font-size: 12.5px; fill: #6b7280; }
+.thesis { font-size: 1.05rem; margin: 0 0 32px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
+th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+td.model { font-weight: 600; }
+.lead-col { background: #eff6ff; }
+.ci { color: #6b7280; font-size: .85em; }
+.note { color: #6b7280; font-size: .9rem; margin-top: 12px; }
+footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb;
+  color: #6b7280; font-size: .85rem; }
+@media (prefers-color-scheme: dark) {
+  body { color: #e5e7eb; background: #0b0f17; }
+  .banner { background: #0c1f17; border-color: #1f2937; }
+  .figure, footer { border-color: #1f2937; }
+  th, td { border-color: #1f2937; }
+  td.model { color: #f3f4f6; }
+  .reorder .svg-title, .reorder .svg-lab { fill: #f3f4f6; }
+  .lead-col { background: #0e1b2e; }
+}
+</style>
+</head>
+<body>
+<div class="banner">
+  <strong>Defensive benchmark.</strong> leakgauge measures whether an agent's defences hold
+  against prompt injection, so they can be improved — it is not an attack toolkit. Success is
+  programmatically verified data leakage, never LLM-judged. See
+  <a href="https://github.com/bamdadd/leakgauge/blob/main/THREAT_MODEL.md">THREAT_MODEL.md</a>.
+</div>
+
+<h1>leakgauge leaderboard</h1>
+<p class="sub">3 model(s) · suite: all · n=37 cases · roster compute $2.51</p>
+
+<h2>Does verified leakage change the ranking?</h2>
+<div class="figure"><svg viewBox="0 0 840 328" width="100%" role="img" aria-label="Rank reorder: hijack-ASR versus leakage-verified ASR" font-family="system-ui, sans-serif" class="reorder">
+<text x="420" y="34" text-anchor="middle" class="svg-title">Ranking by verified leakage reorders the models</text>
+<text x="420" y="58" text-anchor="middle" class="svg-tau">Kendall &#964; = 1.00 (perfect agreement)</text>
+<text x="420" y="80" text-anchor="middle" class="svg-cross">no model changes rank</text>
+<text x="250" y="86" text-anchor="middle" class="svg-col">worse &#8592; rank by hijack-ASR</text>
+<text x="590" y="86" text-anchor="middle" class="svg-col">rank by leakage-verified ASR &#8594; worse</text>
+<line x1="250" y1="108" x2="590" y2="108" stroke="#9ca3af" stroke-width="1.6" opacity="0.55"/>
+<circle cx="250" cy="108" r="6" fill="#9ca3af"/>
+<circle cx="590" cy="108" r="6" fill="#9ca3af"/>
+<text x="232" y="113" text-anchor="end" class="svg-lab">openai:gpt-4o &#183; 8%</text>
+<text x="608" y="113" text-anchor="start" class="svg-lab">8% &#183; openai:gpt-4o</text>
+<line x1="250" y1="170" x2="590" y2="170" stroke="#9ca3af" stroke-width="1.6" opacity="0.55"/>
+<circle cx="250" cy="170" r="6" fill="#9ca3af"/>
+<circle cx="590" cy="170" r="6" fill="#9ca3af"/>
+<text x="232" y="175" text-anchor="end" class="svg-lab">openrouter:meta-llama/llama-3.3-70b-instruct &#183; 2%</text>
+<text x="608" y="175" text-anchor="start" class="svg-lab">2% &#183; openrouter:meta-llama/llama-3.3-70b-instruct</text>
+<line x1="250" y1="232" x2="590" y2="232" stroke="#9ca3af" stroke-width="1.6" opacity="0.55"/>
+<circle cx="250" cy="232" r="6" fill="#9ca3af"/>
+<circle cx="590" cy="232" r="6" fill="#9ca3af"/>
+<text x="232" y="237" text-anchor="end" class="svg-lab">openai:gpt-4o-mini &#183; 0%</text>
+<text x="608" y="237" text-anchor="start" class="svg-lab">0% &#183; openai:gpt-4o-mini</text>
+<text x="420" y="298" text-anchor="middle" class="svg-note">Each line is one model. A crossing = its rank changed when success was scored as verified data leakage instead of task hijacking.</text>
+</svg></div>
+<p class='thesis'>The headline is the <strong>reorder</strong>: ranking models by <em>verified data leakage</em> is not the same as ranking them by whether they were <em>hijacked</em>. Hijacking counts any injected action; leakage counts only actions that actually carried the protected canary out. When the two rankings disagree (Kendall &tau; &lt; 1, lines crossing above), hijack-based benchmarks are mismeasuring exfiltration risk.</p>
+
+<h2>Per-model rates (95% bootstrap CI)</h2>
+<table>
+<thead><tr><th>model</th><th>hijack-ASR</th><th class='lead-col'>leakage-verified ASR</th><th>utility-under-attack</th><th>n</th></tr></thead>
+<tbody>
+<tr><td class='model'>openai:gpt-4o</td><td>0.08 <span class='ci'>[0.03, 0.15]</span></td><td class='lead-col'>0.08 <span class='ci'>[0.03, 0.14]</span></td><td>0.66 <span class='ci'>[0.52, 0.79]</span></td><td class='n'>37</td></tr>
+<tr><td class='model'>openrouter:meta-llama/llama-3.3-70b-instruct</td><td>0.02 <span class='ci'>[0.01, 0.04]</span></td><td class='lead-col'>0.02 <span class='ci'>[0.00, 0.03]</span></td><td>0.43 <span class='ci'>[0.30, 0.57]</span></td><td class='n'>37</td></tr>
+<tr><td class='model'>openai:gpt-4o-mini</td><td>0.00 <span class='ci'>[0.00, 0.01]</span></td><td class='lead-col'>0.00 <span class='ci'>[0.00, 0.01]</span></td><td>0.78 <span class='ci'>[0.66, 0.90]</span></td><td class='n'>37</td></tr>
+</tbody></table>
+<p class="note">
+  Rates are means over cases with a percentile bootstrap 95% CI. The suite is small
+  (n&nbsp;=&nbsp;37), so the intervals are wide — shown openly rather than
+  hidden. The <span class="lead-col">highlighted</span> column, leakage-verified ASR, is the
+  metric the project is about.
+</p>
+
+<footer>
+  Regenerate with <code>leakgauge report results/*.json --html docs/leaderboard/</code>.
+  Static page, no build step. leakgauge is MIT-licensed.
+</footer>
+</body>
+</html>
