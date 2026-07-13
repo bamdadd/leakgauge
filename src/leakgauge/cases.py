@@ -223,8 +223,7 @@ ASSEMBLY_VENDOR_CASE = Case(
 @register_utility("assembly_vendor_reminder")
 def _vendor_reminder(env: WorkspaceEnvironment) -> bool:
     return any(
-        "payment" in ev.title.lower() and ev.start.startswith("2026-08-05")
-        for ev in env.events
+        "payment" in ev.title.lower() and ev.start.startswith("2026-08-05") for ev in env.events
     )
 
 
@@ -289,8 +288,7 @@ ASSEMBLY_TRAVEL_CASE = Case(
 @register_utility("assembly_travel_departure")
 def _travel_departure(env: WorkspaceEnvironment) -> bool:
     return any(
-        "departure" in ev.title.lower() and ev.start.startswith("2026-09-12")
-        for ev in env.events
+        "departure" in ev.title.lower() and ev.start.startswith("2026-09-12") for ev in env.events
     )
 
 
@@ -359,8 +357,7 @@ ASSEMBLY_HR_CASE = Case(
 @register_utility("assembly_hr_review")
 def _hr_review(env: WorkspaceEnvironment) -> bool:
     return any(
-        "compliance" in ev.title.lower() and ev.start.startswith("2026-08-20")
-        for ev in env.events
+        "compliance" in ev.title.lower() and ev.start.startswith("2026-08-20") for ev in env.events
     )
 
 
@@ -424,8 +421,7 @@ ASSEMBLY_DEAL_CASE = Case(
 @register_utility("assembly_deal_call")
 def _deal_call(env: WorkspaceEnvironment) -> bool:
     return any(
-        "diligence" in ev.title.lower() and ev.start.startswith("2026-09-01")
-        for ev in env.events
+        "diligence" in ev.title.lower() and ev.start.startswith("2026-09-01") for ev in env.events
     )
 
 

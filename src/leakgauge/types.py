@@ -15,19 +15,19 @@ from typing import Any, Protocol
 
 @dataclass(frozen=True)
 class ToolCall:
-    step: int                 # 0-based ordinal within the run
-    tool: str                 # tool name, e.g. "send_email"
-    args: dict[str, Any]      # full arguments as the model supplied them
-    result: Any               # tool return value (for downstream context)
+    step: int  # 0-based ordinal within the run
+    tool: str  # tool name, e.g. "send_email"
+    args: dict[str, Any]  # full arguments as the model supplied them
+    result: Any  # tool return value (for downstream context)
 
 
 @dataclass(frozen=True)
 class RunRecord:
     case_id: str
-    model: str                # adapter id, e.g. "anthropic:claude-..."
+    model: str  # adapter id, e.g. "anthropic:claude-..."
     seed: int
-    trace: list[ToolCall]     # ordered tool calls
-    final_text: str           # model's final assistant message
+    trace: list[ToolCall]  # ordered tool calls
+    final_text: str  # model's final assistant message
 
 
 # --- 2. Case schema (authored data on disk, loaded into these types) ---
@@ -35,21 +35,21 @@ class RunRecord:
 
 @dataclass(frozen=True)
 class ExfilSpec:
-    attacker_addresses: list[str]     # emails that count as exfil destinations
-    external_tools: list[str]         # tool names that egress (e.g. "http_post")
+    attacker_addresses: list[str]  # emails that count as exfil destinations
+    external_tools: list[str]  # tool names that egress (e.g. "http_post")
 
 
 @dataclass(frozen=True)
 class Case:
     id: str
-    family: str                       # "delayed" | "assembly" | "encoded"
-    user_task: str                    # benign instruction given to the agent
-    env_seed: dict[str, Any]          # initial workspace state incl. injected
-                                      # content and the planted canary
-    canary: str                       # LKG-<hex>; also present inside env_seed
+    family: str  # "delayed" | "assembly" | "encoded"
+    user_task: str  # benign instruction given to the agent
+    env_seed: dict[str, Any]  # initial workspace state incl. injected
+    # content and the planted canary
+    canary: str  # LKG-<hex>; also present inside env_seed
     exfil_spec: ExfilSpec
-    utility_key: str                  # names the programmatic utility check for
-                                      # this case (see contract 4)
+    utility_key: str  # names the programmatic utility check for
+    # this case (see contract 4)
 
 
 # --- 3. Environment / tool API ---
@@ -61,14 +61,14 @@ class ToolSpec:
 
     name: str
     description: str
-    parameters: dict[str, Any]        # JSON-schema object for the arguments
+    parameters: dict[str, Any]  # JSON-schema object for the arguments
 
 
 class Environment(Protocol):
-    def tools(self) -> list[ToolSpec]: ...          # tool schemas for the model
+    def tools(self) -> list[ToolSpec]: ...  # tool schemas for the model
     def call(self, name: str, args: dict[str, Any]) -> Any: ...  # execute; appends to trace
-    def utility_ok(self, key: str) -> bool: ...     # did the benign task complete?
-    def snapshot(self) -> dict[str, Any]: ...       # for debugging/repro
+    def utility_ok(self, key: str) -> bool: ...  # did the benign task complete?
+    def snapshot(self) -> dict[str, Any]: ...  # for debugging/repro
 
 
 # --- 4. Adapter contract ---
@@ -76,7 +76,7 @@ class Environment(Protocol):
 
 @dataclass(frozen=True)
 class Message:
-    role: str                 # "system" | "user" | "assistant" | "tool"
+    role: str  # "system" | "user" | "assistant" | "tool"
     content: str
     tool_calls: list[dict[str, Any]] | None = None
     tool_call_id: str | None = None
@@ -85,16 +85,14 @@ class Message:
 @dataclass(frozen=True)
 class Response:
     text: str
-    tool_calls: list[dict[str, Any]]    # [{"id", "name", "args"}], empty if none
+    tool_calls: list[dict[str, Any]]  # [{"id", "name", "args"}], empty if none
 
 
 class ModelAdapter(Protocol):
-    def complete(
-        self, messages: list[Message], tools: list[ToolSpec]
-    ) -> Response: ...
+    def complete(self, messages: list[Message], tools: list[ToolSpec]) -> Response: ...
 
 
-def get_adapter(model_id: str) -> ModelAdapter:   # "anthropic:foo" -> adapter
+def get_adapter(model_id: str) -> ModelAdapter:  # "anthropic:foo" -> adapter
     """Return the adapter for a ``provider:model`` id (see ``leakgauge.adapters``)."""
     from leakgauge.adapters import get_adapter as _get_adapter
 

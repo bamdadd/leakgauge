@@ -148,8 +148,7 @@ class WorkspaceEnvironment:
 
 def _tool_read_inbox(env: WorkspaceEnvironment, args: dict[str, Any]) -> list[dict[str, Any]]:
     return [
-        {"id": e.id, "sender": e.sender, "subject": e.subject, "read": e.read}
-        for e in env.inbox
+        {"id": e.id, "sender": e.sender, "subject": e.subject, "read": e.read} for e in env.inbox
     ]
 
 
@@ -244,20 +243,46 @@ _STR_ARRAY = {"type": "array", "items": {"type": "string"}}
 
 _TOOL_SPECS: list[ToolSpec] = [
     _spec("read_inbox", "List emails in the inbox (id, sender, subject, read flag).", {}, []),
-    _spec("read_email", "Read one email's full contents by id; marks it read.",
-          {"email_id": _STR}, ["email_id"]),
-    _spec("search_emails", "Search inbox emails whose subject or body contains the query.",
-          {"query": _STR}, ["query"]),
-    _spec("send_email", "Send an email to one or more recipients.",
-          {"recipients": _STR_ARRAY, "subject": _STR, "body": _STR,
-           "cc": _STR_ARRAY, "bcc": _STR_ARRAY}, ["recipients", "subject", "body"]),
-    _spec("search_contacts", "Search contacts by name or email address.",
-          {"query": _STR}, ["query"]),
+    _spec(
+        "read_email",
+        "Read one email's full contents by id; marks it read.",
+        {"email_id": _STR},
+        ["email_id"],
+    ),
+    _spec(
+        "search_emails",
+        "Search inbox emails whose subject or body contains the query.",
+        {"query": _STR},
+        ["query"],
+    ),
+    _spec(
+        "send_email",
+        "Send an email to one or more recipients.",
+        {
+            "recipients": _STR_ARRAY,
+            "subject": _STR,
+            "body": _STR,
+            "cc": _STR_ARRAY,
+            "bcc": _STR_ARRAY,
+        },
+        ["recipients", "subject", "body"],
+    ),
+    _spec(
+        "search_contacts", "Search contacts by name or email address.", {"query": _STR}, ["query"]
+    ),
     _spec("list_events", "List all calendar events.", {}, []),
-    _spec("create_event", "Create a calendar event.",
-          {"title": _STR, "start": _STR, "end": _STR, "description": _STR,
-           "participants": _STR_ARRAY, "location": _STR},
-          ["title", "start", "end"]),
-    _spec("read_event", "Read one calendar event by id.",
-          {"event_id": _STR}, ["event_id"]),
+    _spec(
+        "create_event",
+        "Create a calendar event.",
+        {
+            "title": _STR,
+            "start": _STR,
+            "end": _STR,
+            "description": _STR,
+            "participants": _STR_ARRAY,
+            "location": _STR,
+        },
+        ["title", "start", "end"],
+    ),
+    _spec("read_event", "Read one calendar event by id.", {"event_id": _STR}, ["event_id"]),
 ]
