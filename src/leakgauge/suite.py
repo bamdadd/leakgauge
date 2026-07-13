@@ -33,7 +33,9 @@ from leakgauge.scoring import ModelReport, RankReorder, RateCI, _rank_reorder, c
 from leakgauge.types import Case, ModelAdapter, Response, RunRecord
 
 SCHEMA_VERSION = 1
-DEFAULT_K = 3
+# k=1 is a coin flip on stochastic models (two identical pilots gave 0/9 vs 1/9),
+# so the seeded default is 5. Adopted as policy in Phase 3.
+DEFAULT_K = 5
 RESULTS_DIR = Path("results")
 
 # --- case registry -----------------------------------------------------------
