@@ -55,6 +55,27 @@ def test_reorder_figure_appears_with_two_models() -> None:
     assert "prov:a" in out and "prov:b" in out
 
 
+def test_final_null_framing_when_ranks_agree() -> None:
+    # Ranks agree on hijack and leakage (tau = 1) -> the honest negative result.
+    summaries = [
+        _summary("openai:gpt-4o", 0.081, 0.077),
+        _summary("openrouter:meta-llama/llama-3.3-70b-instruct", 0.023, 0.018),
+        _summary("openai:gpt-4o-mini", 0.005, 0.005),
+    ]
+    reorder = rank_reorder(summaries)
+    assert reorder is not None and reorder.kendall_tau >= 0.999
+
+    out = render_html(summaries, reorder)
+    assert "Final result: no." in out
+    assert "does NOT reorder these models" in out
+    assert "near the" in out and "floor" in out  # caveat
+    assert "future work" in out
+    assert "qwen-2.5-72b stalled" in out  # limitations
+    assert "gpt-4o, gpt-4o-mini, llama-3.3-70b-instruct" in out  # subtitle names
+    assert "THREAT_MODEL.md" in out
+    assert "no model changes rank" in out  # figure crossing count for the null
+
+
 def test_provenance_shows_n_and_spend() -> None:
     out = render_html([_summary("m1", 0.2, 0.2, n=9)], None)
     assert "n=9 cases" in out

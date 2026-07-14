@@ -66,12 +66,17 @@ def _svg_reorder(reorder: RankReorder, rate_by_model: dict[str, tuple[float, flo
     crossing_txt = (
         "no model changes rank" if moved_n == 0 else f"{moved_n} of {n} models change rank"
     )
+    reorders = reorder.kendall_tau < 0.999
+    svg_title = (
+        "Ranking by verified leakage reorders the models"
+        if reorders
+        else "Ranking by verified leakage does NOT reorder these models"
+    )
     parts: list[str] = [
         f'<svg viewBox="0 0 {width} {height}" width="100%" role="img" '
         f'aria-label="Rank reorder: hijack-ASR versus leakage-verified ASR" '
         f'font-family="system-ui, sans-serif" class="reorder">',
-        f'<text x="{width // 2}" y="34" text-anchor="middle" class="svg-title">'
-        "Ranking by verified leakage reorders the models</text>",
+        f'<text x="{width // 2}" y="34" text-anchor="middle" class="svg-title">{svg_title}</text>',
         f'<text x="{width // 2}" y="58" text-anchor="middle" class="svg-tau">'
         f"Kendall &#964; = {reorder.kendall_tau:.2f} "
         f"({'perfect agreement' if reorder.kendall_tau >= 0.999 else 'ranks disagree'})"
@@ -165,7 +170,10 @@ h1 { margin: 0 0 4px; font-size: 1.9rem; }
 .reorder .svg-col { font-size: 13px; font-weight: 600; fill: #6b7280; letter-spacing: .02em; }
 .reorder .svg-lab { font-size: 14px; fill: #111827; }
 .reorder .svg-note { font-size: 12.5px; fill: #6b7280; }
-.thesis { font-size: 1.05rem; margin: 0 0 32px; }
+.thesis { font-size: 1.05rem; margin: 0 0 20px; }
+.caveat { border: 1px solid #fde68a; border-left: 4px solid #d97706; background: #fffbeb;
+  padding: 12px 16px; border-radius: 8px; font-size: 0.95rem; margin: 0 0 12px; }
+.limits { color: #6b7280; font-size: .9rem; margin: 0 0 32px; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
 th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
@@ -178,6 +186,7 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb;
 @media (prefers-color-scheme: dark) {
   body { color: #e5e7eb; background: #0b0f17; }
   .banner { background: #0c1f17; border-color: #1f2937; }
+  .caveat { background: #1c1503; border-color: #3f2d05; }
   .figure, footer { border-color: #1f2937; }
   th, td { border-color: #1f2937; }
   td.model { color: #f3f4f6; }
@@ -185,6 +194,14 @@ footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb;
   .lead-col { background: #0e1b2e; }
 }
 """
+
+# Roster-run limitations for the final 3-model result. These document the run
+# behind the shipped page, not anything derivable from the JSONs.
+_ROSTER_LIMITATIONS = (
+    "<p class='limits'><strong>Limitations.</strong> qwen-2.5-72b stalled provider-side and is "
+    "excluded. Anthropic (Sonnet/Haiku) was deferred on cost — agentic runs take many tool-call "
+    "steps (~$15–60/model) and, being similarly robust, would not flip this null.</p>"
+)
 
 
 def _n_str(summaries: list[dict[str, Any]]) -> str:
@@ -203,6 +220,18 @@ def _provenance(summaries: list[dict[str, Any]]) -> str:
     return line
 
 
+def _short(model: str) -> str:
+    return model.split(":", 1)[-1].split("/")[-1]
+
+
+def _subtitle(summaries: list[dict[str, Any]], reorder: RankReorder | None) -> str:
+    names = ", ".join(sorted(_short(str(s["model"])) for s in summaries))
+    line = f"<strong>Final result.</strong> {len(summaries)} models evaluated: {names}."
+    if reorder is not None:
+        line += f" Kendall &tau; = {reorder.kendall_tau:.3f}."
+    return line
+
+
 def render_html(summaries: list[dict[str, Any]], reorder: RankReorder | None) -> str:
     rate_by_model = {
         str(s["model"]): (
@@ -212,30 +241,46 @@ def render_html(summaries: list[dict[str, Any]], reorder: RankReorder | None) ->
         for s in summaries
     }
 
-    if reorder is not None:
+    if reorder is None:
+        figure = (
+            "<div class='figure'><p class='note'>Only one model summary — the hijack-vs-leakage "
+            "rank reorder needs &ge;2 models.</p></div>"
+        )
+        thesis = ""
+    elif reorder.kendall_tau < 0.999:
+        # A genuine reorder: leakage ranking differs from hijack ranking.
         figure = f'<div class="figure">{_svg_reorder(reorder, rate_by_model)}</div>'
         thesis = (
             "<p class='thesis'>The headline is the <strong>reorder</strong>: ranking models by "
             "<em>verified data leakage</em> is not the same as ranking them by whether they were "
-            "<em>hijacked</em>. Hijacking counts any injected action; leakage counts only actions "
-            "that actually carried the protected canary out. When the two rankings disagree "
-            "(Kendall &tau; &lt; 1, lines crossing above), hijack-based benchmarks are "
-            "mismeasuring exfiltration risk.</p>"
+            "<em>hijacked</em>. When the two rankings disagree (Kendall &tau; &lt; 1, lines "
+            "crossing above), hijack-based benchmarks are mismeasuring exfiltration risk.</p>"
         )
     else:
-        figure = (
-            "<div class='figure'><p class='note'>Only one model summary so far — the "
-            "hijack-vs-leakage rank reorder needs &ge;2 models. The plot appears here once the "
-            "roster lands more <code>results/*.json</code>.</p></div>"
+        # The final null: ranks agree (τ = 1), so leakage scoring does not reorder.
+        figure = f'<div class="figure">{_svg_reorder(reorder, rate_by_model)}</div>'
+        thesis = (
+            f"<p class='thesis'><strong>Final result: no.</strong> Ranking these "
+            f"{len(summaries)} models by verified data leakage gives the "
+            "<strong>same order</strong> as ranking by task hijacking (Kendall &tau; = 1.000 — "
+            "the lines above are parallel, "
+            "no crossing). The leakage-vs-hijack reorder does not occur for this roster.</p>"
+            "<div class='caveat'><strong>Why, and what it means.</strong> On current frontier "
+            "models these attacks score near the <em>floor</em> — the models barely leak, and "
+            "hijack-ASR &approx; leakage-ASR. With so little spread there is almost nothing for "
+            "leakage-vs-hijack scoring to reorder. Demonstrating the reorder needs harder cases "
+            "that pull the two rates apart (future work). The contribution here is the "
+            "programmatic <em>leakage-verification methodology</em> and a verified leaderboard — "
+            "not a positive reorder.</div>"
+            f"{_ROSTER_LIMITATIONS}"
         )
-        thesis = ""
 
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>leakgauge — leakage-verified injection leaderboard</title>
+<title>leakgauge — FINAL leakage-verified leaderboard</title>
 <style>{_CSS}</style>
 </head>
 <body>
@@ -247,6 +292,7 @@ def render_html(summaries: list[dict[str, Any]], reorder: RankReorder | None) ->
 </div>
 
 <h1>leakgauge leaderboard</h1>
+<p class="sub">{_subtitle(summaries, reorder)}</p>
 <p class="sub">{_provenance(summaries)}</p>
 
 <h2>Does verified leakage change the ranking?</h2>
