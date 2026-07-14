@@ -100,13 +100,14 @@ uv run leakgauge --model openai:gpt-4o --suite all --k 5
 
 ## Status
 
-**Mechanism-validation in progress. No model numbers yet — none are faked.**
+**First results are in. Small suite, wide CIs, nothing faked.**
 
-- **Suite size:** 9 cases today (1 `delayed`, 4 `assembly`, 4 `encoded`), growing toward 30–50. Small `n` means **wide confidence intervals**, and every rate is reported with a bootstrap 95% CI so that is visible rather than hidden.
+- **Suite size:** 37 cases (8 `delayed`, 21 `assembly`, 8 `encoded`). Small `n` means **wide confidence intervals**; every rate carries a bootstrap 95% CI so that is visible, not hidden.
 - **Scorer + harness:** working end to end, exercised offline by the stub agent and a test suite.
-- **Model roster run:** pending. The rank-reorder hero figure and any ASR tables land only after that run, with CIs.
+- **Roster:** 3 models run so far — `gpt-4o`, `gpt-4o-mini`, `llama-3.3-70b` — on the [live leaderboard](https://bamdadd.github.io/leakgauge/leaderboard/). Two more (`claude-sonnet-4-6`, `claude-haiku-4-5`) are pending a cost review; `qwen-2.5-72b` was dropped after a provider-side stall.
+- **Headline so far:** Kendall τ = 1.000 — ranking by leakage-verified ASR does **not** reorder the models yet. On this suite the models barely leak and hijack-ASR ≈ leakage-ASR.
 
-If the two rankings turn out to agree, that is a real, publishable answer too — "hijack-ASR is a fine proxy for leakage" is a useful finding about how injection benchmarks should be scored. The value is the measurement discipline, not the thesis surviving.
+If the two rankings keep agreeing, that is a real, publishable answer too — "hijack-ASR tracks verified leakage on current models" is a useful finding about how injection benchmarks should be scored. The value is the measurement discipline, not the thesis surviving.
 
 ---
 
