@@ -310,8 +310,9 @@ or because it never engages the task --- so utility-under-attack
 near-zero ASR comes with \emph{high} utility ($0.78$): it completes the benign
 task yet rarely acts on the injection, so its floor is resistance, not
 incapacity. GPT-4o sits at moderate utility ($0.66$) with the highest ASR.
-Llama-3.3-70B has the \emph{lowest} utility ($0.43$): it completes fewer benign
-tasks, so part of its low ASR reflects not engaging rather than defending --- the
+Llama-3.3-70B has the \emph{lowest} utility ($0.43$) --- significantly below
+GPT-4o-mini's, their 95\% CIs ($[0.30, 0.57]$ and $[0.66, 0.90]$) not overlapping
+--- so part of its low ASR reflects not engaging rather than defending: the
 below-threshold regime of Section~\ref{sec:threshold}, flagged rather than hidden.
 This cuts toward the null: setting Llama aside, the two clearly-engaging models
 (GPT-4o, GPT-4o-mini) still rank the same on both rates.
