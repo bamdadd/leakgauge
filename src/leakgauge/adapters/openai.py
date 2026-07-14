@@ -13,6 +13,10 @@ from typing import Any
 
 from leakgauge.types import Message, Response, ToolSpec
 
+# Per-request timeout so a stalled provider can't hang a whole run (a batch of
+# hundreds of calls) indefinitely. Seconds.
+REQUEST_TIMEOUT_S = 120.0
+
 
 def _tool_to_openai(spec: ToolSpec) -> dict[str, Any]:
     return {
@@ -48,7 +52,7 @@ class OpenAIAdapter:
         from openai import OpenAI
 
         self.model = model
-        self._client = OpenAI(base_url=base_url) if base_url else OpenAI()
+        self._client = OpenAI(base_url=base_url, timeout=REQUEST_TIMEOUT_S)
 
     def complete(self, messages: list[Message], tools: list[ToolSpec]) -> Response:
         completion = self._client.chat.completions.create(

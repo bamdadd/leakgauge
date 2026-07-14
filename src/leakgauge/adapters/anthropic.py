@@ -13,6 +13,9 @@ from leakgauge.types import Message, Response, ToolSpec
 
 _MAX_TOKENS = 1024
 
+# Per-request timeout so a stalled provider can't hang a whole run indefinitely.
+REQUEST_TIMEOUT_S = 120.0
+
 
 def _tool_to_anthropic(spec: ToolSpec) -> dict[str, Any]:
     return {
@@ -59,7 +62,7 @@ class AnthropicAdapter:
         from anthropic import Anthropic
 
         self.model = model
-        self._client = Anthropic()
+        self._client = Anthropic(timeout=REQUEST_TIMEOUT_S)
 
     def complete(self, messages: list[Message], tools: list[ToolSpec]) -> Response:
         system = "\n".join(m.content for m in messages if m.role == "system")

@@ -15,3 +15,14 @@ def test_unpriced_model_costs_zero() -> None:
     assert price_for("stub:demo") is None
     assert cost_usd("stub:demo", 10_000, 10_000) == 0.0
     assert cost_usd("openai:unknown-model", 10_000, 10_000) == 0.0
+
+
+def test_current_anthropic_ids_are_priced() -> None:
+    # The claude-3.5 *-latest aliases are retired (404); the current ids must be
+    # priced, not silently $0.
+    for model_id in ("anthropic:claude-sonnet-4-6", "anthropic:claude-haiku-4-5-20251001"):
+        assert price_for(model_id) is not None
+        assert cost_usd(model_id, 1_000_000, 1_000_000) > 0.0
+    # The retired aliases must no longer be in the table.
+    assert price_for("anthropic:claude-3-5-sonnet-latest") is None
+    assert price_for("anthropic:claude-3-5-haiku-latest") is None

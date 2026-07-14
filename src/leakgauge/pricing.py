@@ -27,8 +27,10 @@ PRICES: dict[str, Price] = {
     "openai:gpt-4o": Price(2.50, 10.00),
     "openai:gpt-4.1": Price(2.00, 8.00),
     "openai:gpt-4.1-mini": Price(0.40, 1.60),
-    "anthropic:claude-3-5-haiku-latest": Price(0.80, 4.00),
-    "anthropic:claude-3-5-sonnet-latest": Price(3.00, 15.00),
+    # The claude-3.5 *-latest aliases are retired and 404 on the API; use the
+    # current dated/current ids below.
+    "anthropic:claude-sonnet-4-6": Price(3.00, 15.00),
+    "anthropic:claude-haiku-4-5-20251001": Price(1.00, 5.00),
 }
 
 
