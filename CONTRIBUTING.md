@@ -17,8 +17,10 @@ uv run pre-commit install
   reported mean ± std over 3+ seeds.
 
 ## Good first issues
-See the `good first issue` label. If the tracker is empty, open an issue
-describing what you'd like to add and we'll scope it together.
+See the [`good first issue`](https://github.com/bamdadd/leakgauge/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
+label for small, self-contained tasks with acceptance criteria and a note on
+which test to add. If the tracker is empty, open an issue describing what you'd
+like to add and we'll scope it together.
 
 ## Reproducibility rules
 - Pin versions (the `uv.lock` is committed).

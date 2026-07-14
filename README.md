@@ -119,6 +119,12 @@ leakgauge exists to measure and improve robustness, not to break models. Only pu
 
 ---
 
+## Contributing
+
+Contributions welcome — see the [good first issues](https://github.com/bamdadd/leakgauge/issues?q=is%3Aopen+label%3A%22good+first+issue%22) for small, self-contained starting points, and [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the pre-PR checks.
+
+---
+
 ## License
 
 MIT.
