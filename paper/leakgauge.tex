@@ -2,7 +2,7 @@
 
 % ---------------------------------------------------------------------------
 % leakgauge --- arXiv technical note (final)
-% Three-model evaluation; the result is an honest null (Kendall tau = 1.000).
+% Three-model evaluation; the result is an honest null (Kendall tau = 1, n=3).
 % ---------------------------------------------------------------------------
 
 \usepackage[utf8]{inputenc}
@@ -53,12 +53,11 @@ Kendall-$\tau$ rank-reorder statistic. We evaluate three models --- GPT-4o,
 GPT-4o-mini, and Llama-3.3-70B --- over 37 cases with $k = 12$ seeds. Attack
 success is near the floor on all three (GPT-4o: hijack-ASR $0.081$,
 leakage-verified $0.077$), hijack and leakage nearly coincide, and the two
-rankings are \emph{identical} (Kendall $\tau = 1.000$): on these models,
-verifying leakage does \emph{not} reorder the ranking. We report this negative
-result plainly. The near-floor regime leaves little spread for a reorder to
-appear, so the standing contribution is the programmatic, LLM-free
-leakage-verification methodology and a reproducible, leakage-verified
-leaderboard; surfacing a reorder likely needs harder cases (future work).
+rankings are \emph{identical} (Kendall $\tau = 1$): on these models, verifying
+leakage does \emph{not} reorder the ranking. The near-floor regime leaves little
+spread for a reorder to appear; the standing contribution is the programmatic,
+LLM-free leakage-verification methodology and a reproducible leakage-verified
+leaderboard, and surfacing a reorder likely needs harder cases (future work).
 \end{abstract}
 
 % ===========================================================================
@@ -117,7 +116,7 @@ benchmarks score matters for which model one would deploy.
 \end{enumerate}
 We deliberately keep the suite small and single-domain, and we state the
 resulting statistical limits openly (Section~\ref{sec:limitations}). In the
-evaluation reported here the two rankings coincide (Kendall $\tau = 1.000$,
+evaluation reported here the two rankings coincide (Kendall $\tau = 1$,
 Section~\ref{sec:results}): a negative result, whose value is the methodology and
 verified leaderboard rather than a positive reorder.
 
@@ -273,13 +272,12 @@ liable to forward the \emph{wrong} secret --- exactly the regime the distractor
 design targets. The gap is thus a joint property of model capability and case
 construction, not a free-floating model property.
 
-Our evaluation bears this out. All three models sit near the floor
-(Table~\ref{tab:results}): when they act at all, hijack and leakage nearly
-coincide, so the per-model gap is small and the ranking does not reorder. This is
-why the headline is inherently a \emph{multi-model} claim --- a reorder can only
-appear across models that sit at different points of the trade-off between acting
-on the injection and selecting the right secret --- and why, in a regime where
-every model is near the floor, there is little spread for it to appear.
+Our evaluation bears this out: all three models sit near the floor
+(Table~\ref{tab:results}), so where they act, hijack and leakage nearly coincide
+and the ranking does not reorder. The headline is inherently a \emph{multi-model}
+claim --- a reorder can only appear across models at different points of the
+trade-off between acting and selecting the right secret --- and when every model
+is near the floor there is little spread for it to appear.
 Section~\ref{sec:results} gives the numbers.
 
 % ===========================================================================
@@ -297,30 +295,43 @@ models, and \leakasr{} tracks \hijackasr{} closely: wherever a model acts, hijac
 and leakage nearly coincide, so the per-model gap is small. Ranked by either rate
 the order is the same --- GPT-4o, then Llama-3.3-70B, then GPT-4o-mini --- so the
 hijack ranking and the leakage ranking are identical: \textbf{Kendall
-$\tau = 1.000$}. On these models, re-scoring the same traces on verified leakage
+$\tau = 1$}. On these models, re-scoring the same traces on verified leakage
 does \emph{not} reorder the robustness ranking. GPT-4o's bootstrap 95\% CIs are
-$[0.027, 0.146]$ (hijack)
-and $[0.027, 0.135]$ (leakage); with $n = 37$ the intervals are wide and overlap
-heavily, and the two rates are statistically indistinguishable.
-Utility-under-attack is tracked per case but does not bear on the ranking and is
-omitted from the table.
+$[0.027, 0.146]$ (hijack) and $[0.027, 0.135]$ (leakage); with $n = 37$ the
+intervals are wide and overlap heavily, and the two rates are statistically
+indistinguishable. The hijack ranking is itself barely separated (GPT-4o's CI
+reaches $0.027$, near Llama-3.3-70B's point of $0.023$), so there is little
+ranking to reorder in the first place.
+
+\paragraph{Reading the floor: utility-under-attack.} A near-floor ASR is
+ambiguous alone --- a model can score low because it \emph{resists} the injection
+or because it never engages the task --- so utility-under-attack
+(Table~\ref{tab:results}) is the control that separates the two. GPT-4o-mini's
+near-zero ASR comes with \emph{high} utility ($0.78$): it completes the benign
+task yet rarely acts on the injection, so its floor is resistance, not
+incapacity. GPT-4o sits at moderate utility ($0.66$) with the highest ASR.
+Llama-3.3-70B has the \emph{lowest} utility ($0.43$): it completes fewer benign
+tasks, so part of its low ASR reflects not engaging rather than defending --- the
+below-threshold regime of Section~\ref{sec:threshold}, flagged rather than hidden.
+This cuts toward the null: setting Llama aside, the two clearly-engaging models
+(GPT-4o, GPT-4o-mini) still rank the same on both rates.
 
 \begin{table}[t]
 \centering
 \caption{Three-model evaluation over $37$ cases, $k = 12$ seeds. Rates are means
 over cases; ranks are $1 = $ least robust (highest rate). GPT-4o's bootstrap
 95\% CIs are given in the text; with $n = 37$ all intervals are wide. The hijack
-and leakage rankings coincide (Kendall $\tau = 1.000$).}
+and leakage rankings coincide (Kendall $\tau = 1$).}
 \label{tab:results}
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \toprule
-Model & \hijackasr & \leakasr & Rank$_{\text{hijack}}$ & Rank$_{\text{leak}}$\\
+Model & \hijackasr & \leakasr & Utility & Rank$_{\text{hijack}}$ & Rank$_{\text{leak}}$\\
 \midrule
-GPT-4o         & $0.081$ & $0.077$ & 1 & 1\\
-Llama-3.3-70B  & $0.023$ & $0.018$ & 2 & 2\\
-GPT-4o-mini    & $0.005$ & $0.005$ & 3 & 3\\
+GPT-4o         & $0.081$ & $0.077$ & $0.66$ & 1 & 1\\
+Llama-3.3-70B  & $0.023$ & $0.018$ & $0.43$ & 2 & 2\\
+GPT-4o-mini    & $0.005$ & $0.005$ & $0.78$ & 3 & 3\\
 \midrule
-\multicolumn{5}{l}{Kendall $\tau$ (hijack-rank vs.\ leakage-rank) $= 1.000$ --- rankings identical.}\\
+\multicolumn{6}{l}{Kendall $\tau$ (hijack-rank vs.\ leakage-rank) $= 1$ --- rankings identical ($n = 3$ models).}\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -344,7 +355,7 @@ GPT-4o-mini    & $0.005$ & $0.005$ & 3 & 3\\
 \caption{Rank-reorder slopegraph for the three-model roster. Each model's
 robustness rank under \hijackasr{} (left) and \leakasr{} (right) is the same, so
 every connecting line is horizontal and no reordering occurs: Kendall
-$\tau = 1.000$. This is the honest null the question returns on current,
+$\tau = 1$. This is the honest null the question returns on current,
 near-floor models.}
 \label{fig:reorder}
 \end{figure}
@@ -366,14 +377,13 @@ by Boucher et al.\ \cite{boucher2022}, motivating our normalization; OWASP
 catalogues these as LLM01 \cite{owasp_llm}.
 
 \paragraph{Agent-injection benchmarks.} \textbf{AgentDojo} \cite{agentdojo2024}
-is a dynamic environment for evaluating attacks and defences on tool-using LLM
-agents; it pairs benign user tasks with injection tasks across realistic tool
-suites and scores whether the injection task was carried out, alongside benign
-task utility. \textbf{InjecAgent} \cite{injecagent2024} benchmarks indirect
-prompt injection in tool-integrated agents, categorizing harms (e.g., data theft
-and unauthorized actions) and measuring attack success. Both are substantial,
-carefully constructed suites, and our workspace deliberately mirrors AgentDojo's
-state shape to stay portable.
+is a dynamic environment for evaluating attacks and defences on tool-using
+agents; it pairs benign tasks with injection tasks across realistic tool suites
+and scores whether the injection task was carried out, alongside utility.
+\textbf{InjecAgent} \cite{injecagent2024} benchmarks indirect injection in
+tool-integrated agents, categorizing harms (data theft, unauthorized actions) and
+measuring attack success. Both are substantial, carefully built suites; our
+workspace mirrors AgentDojo's state shape to stay portable.
 
 \paragraph{How leakgauge differs.} We do not replace these suites; we credit them
 --- both encode careful security checks, and some of AgentDojo's do inspect
@@ -398,13 +408,13 @@ We state these before they are asked.
         distinguishable from noise. We treat any such reorder as unsupported.
         Results are indicative, not definitive placements.
   \item \textbf{Single domain.} All cases live in one email-and-calendar
-        workspace, so findings may not transfer to other tool ecosystems (code
-        execution, browsing, finance). The predicate and protocol are
-        domain-agnostic, but the evidence is not multi-domain.
+        workspace, so findings may not transfer to other ecosystems (code
+        execution, browsing, finance); the predicate and protocol are
+        domain-agnostic, but the evidence is not.
   \item \textbf{Published patterns only.} We use documented attack families and
-        introduce no novel jailbreaks, so a model robust here is not thereby
-        robust to stronger or adaptive attacks; these ASRs are lower bounds on
-        adversary capability.
+        no novel jailbreaks, so robustness here does not imply robustness to
+        stronger or adaptive attacks; these ASRs are lower bounds on adversary
+        capability.
   \item \textbf{Leakage predicate scope.} The predicate catches the canary only
         under the encodings we normalize (Base64, hex, ROT13, homoglyph/fullwidth);
         an encoding we do not fold (multi-layer or custom ciphers) scores as
@@ -437,12 +447,11 @@ We state these before they are asked.
         is the main direction of future work.
 \end{itemize}
 
-Falsification was explicit, and by that standard our result is a null: the two
-rankings agree exactly ($\tau = 1.000$) and \leakasr{} tracks \hijackasr{} case
-by case. We report it as such --- a negative result about how injection
-benchmarks score, together with the reusable methodology and the leakage-verified
-leaderboard --- rather than searching for a framing under which the reorder
-survives.
+By this falsification standard our result is a null: the rankings agree exactly
+($\tau = 1$) and \leakasr{} tracks \hijackasr{} case by case. We report it as
+such --- a negative result about how injection benchmarks score, plus the
+reusable methodology and the leakage-verified leaderboard --- rather than
+searching for a framing under which the reorder survives.
 
 % ===========================================================================
 \section{Responsible disclosure and safety}
@@ -456,8 +465,6 @@ payloads. Because success is verified leakage, the suite ships its discriminatin
 cases \emph{behind the scorer} rather than as turnkey exploits. If run against a
 live product and a real leak is found, it is disclosed privately to the affected
 vendor first and never published as a working exploit against a named deployment.
-The goal is to reward models that avoid verified leakage, not merely those that
-decline the attacker's action in name.
 
 % ===========================================================================
 \section{Conclusion}
@@ -466,13 +473,13 @@ decline the attacker's action in name.
 Injection benchmarks largely score task hijacking, but the harm they stand in for
 is data exfiltration --- not the same event. leakgauge re-scores the same traces
 on a programmatic, LLM-free leakage predicate and asks whether the ranking
-reorders. Across three models on $37$ cases the answer is no: the hijack and
-leakage rankings coincide (Kendall $\tau = 1.000$), because attack success sits
-near the floor and leaves little room for the two to diverge. We report the
-negative result plainly. The lasting contribution is the verification methodology
---- leakage decided by canary, never by an LLM judge --- and a reproducible,
-leakage-verified leaderboard; whether verified leakage reorders rankings is a
-live question that harder cases, not a different scorer, will settle.
+reorders. Across three models on $37$ cases the answer is no: the hijack and leakage
+rankings coincide (Kendall $\tau = 1$), because attack success sits near the floor
+and leaves little room for the two to diverge. The lasting contribution is the
+verification methodology --- leakage decided by canary, never by an LLM judge ---
+and a reproducible, leakage-verified leaderboard; whether verified leakage
+reorders rankings is a live question that harder cases, not a different scorer,
+will settle.
 
 % ---------------------------------------------------------------------------
 \begin{thebibliography}{9}
