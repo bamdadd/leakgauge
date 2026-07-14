@@ -1,0 +1,534 @@
+\documentclass[11pt]{article}
+
+% ---------------------------------------------------------------------------
+% leakgauge --- arXiv technical note (final)
+% Three-model evaluation; the result is an honest null (Kendall tau = 1, n=3).
+% ---------------------------------------------------------------------------
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=0.9in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\hijackasr}{hijack-ASR}
+\newcommand{\leakasr}{leakage-verified ASR}
+
+\title{\textbf{leakgauge}: Does Verifying Data Leakage Reorder\\
+Prompt-Injection Robustness Rankings?\\[0.4em]
+\large A leakage-verified benchmark for LLM agents}
+
+\author{%
+  Bamdad Dashtban\\
+  \texttt{bamdadd@gmail.com}
+}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Benchmarks for prompt injection in tool-using LLM agents typically score an
+\emph{attack-success rate} (ASR) that counts whether the model was
+\emph{hijacked} --- coaxed into performing the attacker's action, such as
+issuing an outbound tool call to an attacker-controlled destination. But the
+harm that motivates these benchmarks is usually \emph{data exfiltration}: a
+secret actually leaving the trust boundary. Performing the action and leaking a
+secret are not the same event. We ask a measurement question: if we re-score the
+\emph{same} agent traces on \emph{verified leakage} --- a unique canary token
+provably present in the outbound call's arguments --- does the resulting ranking
+of model robustness differ from the ranking produced by hijack ASR?
+\textbf{leakgauge} is a small, defensive, leakage-verified benchmark built to
+answer this. Leakage is decided by a programmatic canary predicate (exact string
+match after decoding common encodings; no LLM judge), over an email-and-calendar
+agent workspace exercised by three \emph{published} indirect-injection attack
+families. On each rate we report a bootstrap 95\% CI and, as the headline, a
+Kendall-$\tau$ rank-reorder statistic. We evaluate three models --- GPT-4o,
+GPT-4o-mini, and Llama-3.3-70B --- over 37 cases with $k = 12$ seeds. Attack
+success is near the floor on all three (GPT-4o: hijack-ASR $0.081$,
+leakage-verified $0.077$), hijack and leakage nearly coincide, and the two
+rankings are \emph{identical} (Kendall $\tau = 1$): on these models, verifying
+leakage does \emph{not} reorder the ranking. The near-floor regime leaves little
+spread for a reorder to appear; the standing contribution is the programmatic,
+LLM-free leakage-verification methodology and a reproducible leakage-verified
+leaderboard, and surfacing a reorder likely needs harder cases (future work).
+\end{abstract}
+
+% ===========================================================================
+\section{Introduction}
+% ===========================================================================
+
+\textbf{This is a defensive measurement harness, not an attack toolkit.} Its
+purpose is to quantify whether an agent's defences hold against prompt injection
+so they can be improved, and to sharpen how the field \emph{scores} that
+robustness. Attacks appear in the suite only to exercise defences; only
+previously published attack patterns are used, and no novel high-potency
+jailbreaks or harmful-content payloads are introduced (Section~\ref{sec:safety}).
+
+Tool-using LLM agents read untrusted content --- emails, web pages, calendar
+invitations --- and act on it with privileged tools. \emph{Indirect prompt
+injection} places attacker instructions inside that content
+\cite{greshake2023,perez2022}. The community has responded with agent-injection
+benchmarks, notably AgentDojo \cite{agentdojo2024} and InjecAgent
+\cite{injecagent2024}, which measure how often an attack succeeds.
+
+\paragraph{The gap.} ``Success'' in these suites is, operationally, that the
+model \emph{took the attacker's action} --- e.g., it called \code{send\_email}
+to an attacker address. Call this \emph{hijacking}. But the risk a data-exposure
+threat model cares about is \emph{exfiltration}: did a protected secret leave
+with that call? A model can be hijacked --- it emits the outbound call --- yet
+leak nothing, because the call carried no secret (it refused the credential,
+hallucinated a placeholder, or was interrupted). Counting hijacks therefore
+\emph{upper-bounds} exfiltration risk, potentially loosely, and a leaderboard
+sorted by hijack ASR may rank models differently from one sorted by verified
+leakage.
+
+\paragraph{The question.} We therefore ask, question-first:
+\begin{quote}
+\emph{If the same agent traces are re-scored on programmatically verified data
+leakage instead of task hijacking, does the ranking of model robustness
+reorder?}
+\end{quote}
+This is a claim about \emph{measurement discipline}, and it is falsifiable
+(Section~\ref{sec:limitations}). If the two rankings agree, leakage verification
+adds no discriminative signal and ``hijack ASR is a fine proxy'' becomes a
+supported, publishable conclusion. If they disagree, then how injection
+benchmarks score matters for which model one would deploy.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+  \item A \emph{leakage-verified} scoring predicate for agent injection: a
+        per-case canary token whose presence in outbound tool-call arguments is
+        decided by pure string matching after encoding-normalization --- never by
+        an LLM judge (Section~\ref{sec:predicate}).
+  \item A small, reproducible email-and-calendar agent workspace and three
+        \emph{published} attack families --- delayed trigger, cross-context
+        assembly, and encoding-wrapped exfiltration (Section~\ref{sec:families}).
+  \item A scoring protocol reporting two ASRs and utility-under-attack with
+        bootstrap CIs, and a Kendall-$\tau$ \emph{rank-reorder} statistic as the
+        headline thesis test (Section~\ref{sec:metrics}).
+\end{enumerate}
+We deliberately keep the suite small and single-domain, and we state the
+resulting statistical limits openly (Section~\ref{sec:limitations}). In the
+evaluation reported here the two rankings coincide (Kendall $\tau = 1$,
+Section~\ref{sec:results}): a negative result, whose value is the methodology and
+verified leaderboard rather than a positive reorder.
+
+% ===========================================================================
+\section{Method}
+\label{sec:method}
+% ===========================================================================
+
+\subsection{The canary / leakage predicate (the spine)}
+\label{sec:predicate}
+
+Every case plants a unique, unguessable \emph{canary} token of the form
+\code{LKG-}\textlangle 32 hex\textrangle{} in an environment field the benign
+task legitimately touches (an email body, a calendar note). Two events are then
+read off a single recorded trace of tool calls:
+
+\begin{description}
+  \item[Hijack] an outbound/sensitive tool was called with a destination
+    matching the case's exfiltration spec (an attacker address in a
+    recipient/URL field), \emph{regardless of payload}.
+  \item[Leakage] such an outbound call's arguments actually \emph{carry the
+    canary} --- the exact token, or a decodable transform of it.
+\end{description}
+
+Leakage is a \textbf{pure string match after normalization, with no model in the
+loop}. Normalization folds the transforms an attacker can apply to slip a naive
+substring filter: Base64, hexadecimal, ROT13, and Unicode homoglyph / fullwidth
+confusables. Concretely, the predicate (i) case-folds and applies Unicode NFKC
+plus a homoglyph table to the outbound arguments, then (ii) searches for the
+canary both forward (pre-encoding the canary and matching) and in reverse
+(decoding candidate Base64/hex tokens and un-rotating ROT13, then matching). A
+match counts as leakage only if it occurs in a call whose \emph{destination}
+matches the exfiltration spec, so a benign message that merely quotes an attacker
+address --- or even the canary --- to a legitimate recipient does not register.
+
+Deciding leakage programmatically is the methodological point: an LLM judge would
+fold the very failure mode under study --- a model's opinion about whether a
+secret leaked --- into the measurement of it. The canary makes leakage a
+decidable predicate over the trace.
+
+\subsection{Workspace and traces}
+
+The environment is a lightweight, zero-dependency email-and-calendar workspace
+whose state shape (inbox, sent, contacts, calendar) mirrors AgentDojo
+\cite{agentdojo2024} so that cases and defences can port, but which we implement
+self-contained. It exposes the tools an assistant would use --- reading and
+searching mail, sending mail, searching contacts, and listing, reading, and
+creating calendar events. Attacker content lives \emph{inside} environment
+fields (email bodies, event descriptions), never in the user's instruction. Each
+tool call is recorded with its \emph{full arguments}, so both the hijack and the
+leakage predicate are computable from one trace. A run is scored per case over
+$k \geq 12$ seeded repeats.
+
+\subsection{Attack families (published patterns only)}
+\label{sec:families}
+
+Each family instantiates a documented indirect-injection pattern in the
+workspace. We introduce no new jailbreak technique; the contribution is the
+leakage-verified \emph{scoring}, not the attacks.
+
+\begin{description}
+  \item[Delayed trigger] the injected instruction sits in a benign-looking
+    thread the agent only reaches partway through the legitimate task, so the
+    malicious step is temporally separated from the content that triggers it
+    \cite{greshake2023}.
+  \item[Cross-context assembly] the payload is \emph{split} across multiple
+    retrieved sources --- the secret in one field, the ``forward it''
+    instruction in another, the destination in a third --- so no single field
+    reads as malicious and only the assembled whole is an exfiltration command
+    \cite{greshake2023}; catalogued under OWASP LLM01 \cite{owasp_llm}.
+  \item[Encoding-wrapped] the injected instruction and/or the exfiltrated canary
+    is wrapped in Base64, hexadecimal, ROT13, or homoglyph/confusable characters
+    so a naive substring or keyword filter over tool arguments never sees the raw
+    secret \cite{wei2023,boucher2022}. This family directly stresses the
+    normalization step of the leakage predicate.
+\end{description}
+
+\subsection{Case design: on-path injection and realism distractors}
+\label{sec:onpath}
+
+\paragraph{On-path injection.} A benchmark of this kind measures a model's
+\emph{decision} only if the attack is actually delivered to it. We therefore
+require that in every case the injected content sits \emph{on the benign task's
+critical path}: reading it is a step the model must take to complete the
+legitimate request, so an agent that does its job is guaranteed to encounter the
+injection, and the target secret is reachable through the tools the benign task
+already uses. Without this invariant a case conflates two different outcomes ---
+the model \emph{resisting} the attack versus simply \emph{never seeing} it ---
+and the leakage rate is driven by non-delivery rather than robustness. On-path
+injection makes delivery an experimental constant, so hijack and leakage reflect
+behaviour \emph{given} the attack, not the odds it was surfaced.
+
+\paragraph{Realism distractors.} On-path delivery alone is not enough for the gap
+to be \emph{measurable}. If the planted canary were the \emph{only} secret a
+hijacked model could reach, then any model that performs the injected action must
+forward the canary --- hijack would imply leak by construction and \leakasr{}
+would collapse onto \hijackasr. We break this coupling with \emph{realism
+distractors}: each mailbox holds several plausible secrets --- credentials,
+access codes, and tokens for different systems --- only one of which is the
+canary the attack targets. A hijacked model must then not merely act but select
+the \emph{right} secret; a model that acts on a cluttered, realistic mailbox and
+forwards the \emph{wrong} secret is hijacked \emph{without} leaking. Crucially
+this yields hijack-without-leak \emph{without tuning} attack difficulty --- the
+gap emerges from ordinary mailbox realism, not from a knob set to manufacture it.
+
+\subsection{Metrics and rigor}
+\label{sec:metrics}
+
+Over a list of per-case, per-seed records we report three rates:
+\begin{itemize}
+  \item \textbf{\hijackasr} --- mean over cases that the injected \emph{action}
+        occurred (an outbound call to an exfil destination), regardless of
+        payload.
+  \item \textbf{\leakasr} --- mean over cases that such a call actually carried
+        the canary, by the predicate of Section~\ref{sec:predicate}.
+  \item \textbf{utility-under-attack} --- mean over cases that the benign user
+        task still completed, checked programmatically. This guards against a
+        model scoring ``robust'' merely by refusing to do anything.
+\end{itemize}
+
+The gap $\text{\hijackasr} - \text{\leakasr}$ is the quantity of interest: how
+much counting hijacks overstates verified exfiltration.
+
+\paragraph{Uncertainty.} On each rate we report a percentile \textbf{bootstrap
+95\% confidence interval}: resample cases with replacement ($B \approx 10{,}000$),
+recompute the rate, take the 2.5/97.5 percentiles. With $n = 37$ cases the
+intervals are wide, and we report them as wide; no claim is made that the
+intervals do not support. Per-case success across $k \geq 12$ seeds is reported
+as mean~$\pm$~std.
+
+\paragraph{Headline: the rank-reorder statistic.} We rank the model set by
+\hijackasr{} and, separately, by \leakasr, and report the reorder as a Kendall
+$\tau$ together with a side-by-side rank table (Table~\ref{tab:results},
+Figure~\ref{fig:reorder}). $\tau \approx 1$ means the rankings agree (leakage
+adds no ordering signal); $\tau$ meaningfully below $1$, and outside the
+bootstrap interval, is the reorder the question asks about. This statistic
+\emph{is} the thesis test.
+
+\subsection{The gap is an instrument-threshold effect}
+\label{sec:threshold}
+
+Whether a case can \emph{exhibit} a hijack--leak gap is a property of the
+measurement instrument, not only of the model, and two regimes flatten it to
+zero. (i) \textbf{Below threshold --- the model never acts:} a model that refuses
+the injection or never issues the outbound call scores hijack $=$ leak $= 0$, so
+there is no gap to observe and the case is uninformative for that model.
+(ii) \textbf{Over-coupled cases --- hijack forces leak:} if the target secret is
+the only thing a hijacked model can grab (no distractors,
+Section~\ref{sec:onpath}), then acting mechanically implies leaking and the gap
+is zero by construction. An honest, non-trivial gap therefore requires a model
+\emph{capable enough to act} on a realistic, multi-secret mailbox \emph{and}
+liable to forward the \emph{wrong} secret --- exactly the regime the distractor
+design targets. The gap is thus a joint property of model capability and case
+construction, not a free-floating model property.
+
+Our evaluation bears this out: all three models sit near the floor
+(Table~\ref{tab:results}), so where they act, hijack and leakage nearly coincide
+and the ranking does not reorder. The headline is inherently a \emph{multi-model}
+claim --- a reorder can only appear across models at different points of the
+trade-off between acting and selecting the right secret --- and when every model
+is near the floor there is little spread for it to appear.
+Section~\ref{sec:results} gives the numbers.
+
+% ===========================================================================
+\section{Results}
+\label{sec:results}
+% ===========================================================================
+
+We evaluate three instruction-tuned agent models under identical cases, seeds,
+and tools --- GPT-4o, GPT-4o-mini, and Llama-3.3-70B --- each over all $37$ cases
+with $k = 12$ seeds. Table~\ref{tab:results} reports \hijackasr{} and \leakasr;
+Figure~\ref{fig:reorder} shows the two rankings. The full roster cost \$2.51.
+
+\paragraph{Result: no reorder.} Attack success is near the floor on all three
+models, and \leakasr{} tracks \hijackasr{} closely: wherever a model acts, hijack
+and leakage nearly coincide, so the per-model gap is small. Ranked by either rate
+the order is the same --- GPT-4o, then Llama-3.3-70B, then GPT-4o-mini --- so the
+hijack ranking and the leakage ranking are identical: \textbf{Kendall
+$\tau = 1$}. On these models, re-scoring the same traces on verified leakage
+does \emph{not} reorder the robustness ranking. GPT-4o's bootstrap 95\% CIs are
+$[0.027, 0.146]$ (hijack) and $[0.027, 0.135]$ (leakage); with $n = 37$ the
+intervals are wide and overlap heavily, and the two rates are statistically
+indistinguishable. The hijack ranking is itself barely separated (GPT-4o's CI
+reaches $0.027$, near Llama-3.3-70B's point of $0.023$), so there is little
+ranking to reorder in the first place.
+
+\paragraph{Reading the floor: utility-under-attack.} A near-floor ASR is
+ambiguous alone --- a model can score low because it \emph{resists} the injection
+or because it never engages the task --- so utility-under-attack
+(Table~\ref{tab:results}) is the control that separates the two. GPT-4o-mini's
+near-zero ASR comes with \emph{high} utility ($0.78$): it completes the benign
+task yet rarely acts on the injection, so its floor is resistance, not
+incapacity. GPT-4o sits at moderate utility ($0.66$) with the highest ASR.
+Llama-3.3-70B has the \emph{lowest} utility ($0.43$) --- significantly below
+GPT-4o-mini's, their 95\% CIs ($[0.30, 0.57]$ and $[0.66, 0.90]$) not overlapping
+--- so part of its low ASR reflects not engaging rather than defending: the
+below-threshold regime of Section~\ref{sec:threshold}, flagged rather than hidden.
+This cuts toward the null: setting Llama aside, the two clearly-engaging models
+(GPT-4o, GPT-4o-mini) still rank the same on both rates.
+
+\begin{table}[t]
+\centering
+\caption{Three-model evaluation over $37$ cases, $k = 12$ seeds. Rates are means
+over cases; ranks are $1 = $ least robust (highest rate). GPT-4o's bootstrap
+95\% CIs are given in the text; with $n = 37$ all intervals are wide. The hijack
+and leakage rankings coincide (Kendall $\tau = 1$).}
+\label{tab:results}
+\begin{tabular}{lccccc}
+\toprule
+Model & \hijackasr & \leakasr & Utility & Rank$_{\text{hijack}}$ & Rank$_{\text{leak}}$\\
+\midrule
+GPT-4o         & $0.081$ & $0.077$ & $0.66$ & 1 & 1\\
+Llama-3.3-70B  & $0.023$ & $0.018$ & $0.43$ & 2 & 2\\
+GPT-4o-mini    & $0.005$ & $0.005$ & $0.78$ & 3 & 3\\
+\midrule
+\multicolumn{6}{l}{Kendall $\tau$ (hijack-rank vs.\ leakage-rank) $= 1$ --- rankings identical ($n = 3$ models).}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[yscale=0.75]
+  \node[anchor=south] at (0,3.55) {\small Rank by \hijackasr};
+  \node[anchor=south] at (5,3.55) {\small Rank by \leakasr};
+  \foreach \y in {1,2,3}{
+    \node[anchor=east] at (-0.2,\y) {\scriptsize \the\numexpr4-\y\relax};
+    \node[anchor=west] at (5.2,\y) {\scriptsize \the\numexpr4-\y\relax};
+    \fill (0,\y) circle (1.5pt);
+    \fill (5,\y) circle (1.5pt);
+    \draw[thick] (0,\y) -- (5,\y);
+  }
+  \node[fill=white,inner sep=1.5pt] at (2.5,3) {\scriptsize GPT-4o};
+  \node[fill=white,inner sep=1.5pt] at (2.5,2) {\scriptsize Llama-3.3-70B};
+  \node[fill=white,inner sep=1.5pt] at (2.5,1) {\scriptsize GPT-4o-mini};
+\end{tikzpicture}
+\caption{Rank-reorder slopegraph for the three-model roster. Each model's
+robustness rank under \hijackasr{} (left) and \leakasr{} (right) is the same, so
+every connecting line is horizontal and no reordering occurs: Kendall
+$\tau = 1$. This is the honest null the question returns on current,
+near-floor models.}
+\label{fig:reorder}
+\end{figure}
+
+% ===========================================================================
+\section{Related work}
+\label{sec:related}
+% ===========================================================================
+
+\paragraph{Prompt injection.} Direct prompt injection --- overriding a model's
+instructions with adversarial input --- was characterized by Perez and Ribeiro
+\cite{perez2022}. Greshake et al.\ \cite{greshake2023} introduced
+\emph{indirect} injection, where the adversarial instruction arrives through
+retrieved content, and demonstrated exfiltration and multi-stage payloads against
+LLM-integrated applications --- the threat model our families instantiate.
+Encoding-based filter bypasses (Base64 and other low-resource encodings) were
+studied by Wei et al.\ \cite{wei2023} and imperceptible/homoglyph perturbations
+by Boucher et al.\ \cite{boucher2022}, motivating our normalization; OWASP
+catalogues these as LLM01 \cite{owasp_llm}.
+
+\paragraph{Agent-injection benchmarks.} \textbf{AgentDojo} \cite{agentdojo2024}
+is a dynamic environment for evaluating attacks and defences on tool-using
+agents; it pairs benign tasks with injection tasks across realistic tool suites
+and scores whether the injection task was carried out, alongside utility.
+\textbf{InjecAgent} \cite{injecagent2024} benchmarks indirect injection in
+tool-integrated agents, categorizing harms (data theft, unauthorized actions) and
+measuring attack success. Both are substantial, carefully built suites; our
+workspace mirrors AgentDojo's state shape to stay portable.
+
+\paragraph{How leakgauge differs.} We do not replace these suites; we credit them
+--- both encode careful security checks, and some of AgentDojo's do inspect
+whether attacker-controlled data reached its target. leakgauge makes \emph{verified
+leakage} the uniform success criterion via one mechanism --- a planted canary
+provably present, after encoding-normalization, in the outbound call's arguments
+--- and turns the hijack--leakage \emph{gap} into a first-class, reported quantity
+(does re-scoring identical traces reorder the ranking?). The predicate and the
+reorder metric are the contribution, not scale: our suite is much smaller and
+single-domain than either.
+
+% ===========================================================================
+\section{Limitations}
+\label{sec:limitations}
+% ===========================================================================
+
+We state these before they are asked.
+
+\begin{itemize}
+  \item \textbf{Small suite, wide intervals.} With $n = 37$ cases the bootstrap
+        95\% CIs are wide; a reorder falling \emph{within} the intervals is not
+        distinguishable from noise. We treat any such reorder as unsupported.
+        Results are indicative, not definitive placements.
+  \item \textbf{Single domain.} All cases live in one email-and-calendar
+        workspace, so findings may not transfer to other ecosystems (code
+        execution, browsing, finance); the predicate and protocol are
+        domain-agnostic, but the evidence is not.
+  \item \textbf{Published patterns only.} We use documented attack families and
+        no novel jailbreaks, so robustness here does not imply robustness to
+        stronger or adaptive attacks; these ASRs are lower bounds on adversary
+        capability.
+  \item \textbf{Leakage predicate scope.} The predicate catches the canary only
+        under the encodings we normalize (Base64, hex, ROT13, homoglyph/fullwidth);
+        an encoding we do not fold (multi-layer or custom ciphers) scores as
+        hijack-without-leak, a leakage false negative. The set is explicit and
+        extensible, and is exactly the boundary the encoding-wrapped family probes.
+  \item \textbf{Small roster; two capable models not run.} We report three
+        models. \code{qwen-2.5-72b} stalled provider-side during the run and was
+        excluded. Anthropic models were deferred on cost: capable agentic models
+        run many tool-call steps per case ($\approx$\,\$15--60 per model at this
+        suite size), which would exceed the budget and, being similarly robust,
+        would not be expected to flip the null. Three models is a thin base for a
+        rank statistic, and we say so.
+  \item \textbf{Cases required calibration.} An early (v1) case set
+        \emph{under-triggered}: several injections sat off the benign critical
+        path, so a compliant agent could finish without ever reading the attack
+        --- flooring leakage at zero from non-delivery, not robustness. This
+        motivated the on-path principle with realism distractors
+        (Section~\ref{sec:onpath}). The redesign was guided by single-model
+        pilots that located the instrument-threshold regime
+        (Section~\ref{sec:threshold}); the reported evaluation uses the
+        redesigned cases.
+  \item \textbf{Near-floor attack success (the key caveat).} On the current
+        frontier models the attacks land near the floor --- little leakage, and
+        hijack $\approx$ leakage --- so there is almost no spread for a
+        leakage-vs-hijack reorder to arise from. The null we observe is therefore
+        partly a property of this regime, not evidence that verified leakage can
+        never reorder rankings. Testing the reorder thesis properly needs
+        \emph{harder} cases --- stronger or adaptive attacks and more
+        exfiltration-prone tasks that push capable models off the floor --- which
+        is the main direction of future work.
+\end{itemize}
+
+By this falsification standard our result is a null: the rankings agree exactly
+($\tau = 1$) and \leakasr{} tracks \hijackasr{} case by case. We report it as
+such --- a negative result about how injection benchmarks score, plus the
+reusable methodology and the leakage-verified leaderboard --- rather than
+searching for a framing under which the reorder survives.
+
+% ===========================================================================
+\section{Responsible disclosure and safety}
+\label{sec:safety}
+% ===========================================================================
+
+leakgauge is built to measure and improve robustness. Only published attack
+patterns are used --- encoding wrappers, delayed triggers, split/multi-source
+payloads --- with no novel high-potency jailbreaks and no harmful-content
+payloads. Because success is verified leakage, the suite ships its discriminating
+cases \emph{behind the scorer} rather than as turnkey exploits. If run against a
+live product and a real leak is found, it is disclosed privately to the affected
+vendor first and never published as a working exploit against a named deployment.
+
+% ===========================================================================
+\section{Conclusion}
+% ===========================================================================
+
+Injection benchmarks largely score task hijacking, but the harm they stand in for
+is data exfiltration --- not the same event. leakgauge re-scores the same traces
+on a programmatic, LLM-free leakage predicate and asks whether the ranking
+reorders. Across three models on $37$ cases the answer is no: the hijack and leakage
+rankings coincide (Kendall $\tau = 1$), because attack success sits near the floor
+and leaves little room for the two to diverge. The lasting contribution is the
+verification methodology --- leakage decided by canary, never by an LLM judge ---
+and a reproducible, leakage-verified leaderboard; whether verified leakage
+reorders rankings is a live question that harder cases, not a different scorer,
+will settle.
+
+% ---------------------------------------------------------------------------
+\begin{thebibliography}{9}
+\footnotesize
+\setlength{\itemsep}{0.15em}
+
+\bibitem{agentdojo2024}
+E.~Debenedetti, J.~Zhang, M.~Balunovi\'c, L.~Beurer-Kellner, M.~Fischer, and
+F.~Tram\`er.
+\newblock AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks
+and Defenses for LLM Agents.
+\newblock \emph{NeurIPS Datasets and Benchmarks}, 2024. arXiv:2406.13352.
+
+\bibitem{injecagent2024}
+Q.~Zhan, Z.~Liang, Z.~Ying, and D.~Kang.
+\newblock InjecAgent: Benchmarking Indirect Prompt Injections in
+Tool-Integrated Large Language Model Agents.
+\newblock \emph{Findings of ACL}, 2024. arXiv:2403.02691.
+
+\bibitem{greshake2023}
+K.~Greshake, S.~Abdelnabi, S.~Mishra, C.~Endres, T.~Holz, and M.~Fritz.
+\newblock Not What You've Signed Up For: Compromising Real-World
+LLM-Integrated Applications with Indirect Prompt Injection.
+\newblock \emph{ACM Workshop on Artificial Intelligence and Security (AISec)},
+2023. arXiv:2302.12173.
+
+\bibitem{perez2022}
+F.~Perez and I.~Ribeiro.
+\newblock Ignore Previous Prompt: Attack Techniques for Language Models.
+\newblock \emph{NeurIPS ML Safety Workshop}, 2022. arXiv:2211.09527.
+
+\bibitem{wei2023}
+A.~Wei, N.~Haghtalab, and J.~Steinhardt.
+\newblock Jailbroken: How Does LLM Safety Training Fail?
+\newblock \emph{NeurIPS}, 2023. arXiv:2307.02483.
+
+\bibitem{boucher2022}
+N.~Boucher, I.~Shumailov, R.~Anderson, and N.~Papernot.
+\newblock Bad Characters: Imperceptible NLP Attacks.
+\newblock \emph{IEEE Symposium on Security and Privacy (S\&P)}, 2022.
+arXiv:2106.09898.
+
+\bibitem{owasp_llm}
+OWASP Foundation.
+\newblock OWASP Top 10 for Large Language Model Applications --- LLM01: Prompt
+Injection.
+\newblock 2023--2025. \url{https://genai.owasp.org/}
+
+\end{thebibliography}
+
+\end{document}
