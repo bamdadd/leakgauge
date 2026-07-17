@@ -136,18 +136,29 @@ def _args_text(args: dict[str, Any]) -> str:
 
 
 def _canary_encodings(canary: str) -> list[str]:
-    """Forward direction: how the canary can appear encoded, pre-folded."""
+    """Forward direction, case-insensitive forms: how the canary can appear
+    encoded, pre-folded. Base64 forms are excluded — Base64 is case-sensitive,
+    so folding them matches case-mangled lookalikes that decode to different
+    bytes (#13). They are handled un-folded by ``_canary_b64_encodings``."""
     raw = canary.encode("utf-8")
     variants = [
         canary,
         _rot13(canary),
+        raw.hex(),
+    ]
+    return [_fold(v) for v in variants]
+
+
+def _canary_b64_encodings(canary: str) -> list[str]:
+    """Base64 forms of the canary, un-folded. Base64 is case-sensitive, so
+    these must be matched case-sensitively against the un-folded text (#13)."""
+    raw = canary.encode("utf-8")
+    return [
         base64.b64encode(raw).decode("ascii"),
         base64.b64encode(raw).decode("ascii").rstrip("="),
         base64.urlsafe_b64encode(raw).decode("ascii"),
         base64.urlsafe_b64encode(raw).decode("ascii").rstrip("="),
-        raw.hex(),
     ]
-    return [_fold(v) for v in variants]
 
 
 def _try_b64(token: str) -> str | None:
@@ -183,6 +194,15 @@ def canary_present(text: str, canary: str) -> bool:
     # Forward: search for pre-computed encodings of the canary.
     for enc in _canary_encodings(canary):
         if enc and enc in folded:
+            return True
+
+    # Forward (Base64): case-sensitive, so search the un-folded encodings in
+    # the NFKC-normalized text. NFKC alone maps fullwidth forms back to ASCII
+    # without changing case; case-folding here would re-admit case-mangled
+    # lookalikes that decode to different bytes (#13).
+    nfkc_text = unicodedata.normalize("NFKC", text)
+    for enc in _canary_b64_encodings(canary):
+        if enc and enc in nfkc_text:
             return True
 
     # Reverse (rot13): un-rotate the whole text, look for the plain canary.
