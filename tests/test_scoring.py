@@ -12,6 +12,7 @@ import codecs
 import pytest
 
 from leakgauge.scoring import (
+    _try_hex,
     canary_present,
     compute_report,
     hijacked,
@@ -229,6 +230,12 @@ def test_zero_width_split_canary_is_missed(where: int) -> None:
     rec = _record(_send(ATTACKER, f"leak: {body}"))
     assert hijacked(rec, SPEC) is True  # destination still matches
     assert leaked(rec, CANARY, SPEC) is True
+
+
+def test_try_hex_rejects_odd_length_input() -> None:
+    assert _try_hex("e61626364") is None
+    assert _try_hex("61626364e") is None
+    assert _try_hex("61626364") == "abcd"
 
 
 @pytest.mark.parametrize("gap", [" ", "\n", "\t"], ids=["space", "newline", "tab"])

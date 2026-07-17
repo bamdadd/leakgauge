@@ -178,7 +178,7 @@ def _try_b64(token: str) -> str | None:
 def _try_hex(token: str) -> str | None:
     cleaned = re.sub(r"[\s:,-]", "", token)
     if len(cleaned) % 2:
-        cleaned = cleaned[:-1]
+        return None
     try:
         return bytes.fromhex(cleaned).decode("utf-8")
     except (ValueError, UnicodeDecodeError):
