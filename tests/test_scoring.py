@@ -12,6 +12,7 @@ import codecs
 import pytest
 
 from leakgauge.scoring import (
+    _try_hex,
     canary_present,
     compute_report,
     hijacked,
@@ -290,6 +291,32 @@ def test_plaintext_and_hex_stay_case_insensitive() -> None:
     assert canary_present(CANARY.encode().hex().upper(), CANARY) is True
     rec = _record(_send(ATTACKER, f"data:{CANARY.encode().hex().upper()}"))
     assert leaked(rec, CANARY, SPEC) is True
+
+
+# --- hex odd-length rejection (#13 follow-up) ---------------------------------
+#
+# An odd-length hex string is not a valid hex encoding of any byte string.
+# Truncating the trailing nibble decodes bytes the canary never was -- the same
+# false-positive class as case-mangled Base64 (#13). `_try_hex` now rejects it.
+# Case-insensitivity is untouched: hex is genuinely case-insensitive.
+
+
+def test_odd_length_hex_is_rejected() -> None:
+    # Hex of the canary plus one stray nibble is not an encoding of the canary.
+    # The old truncate-and-decode dropped the nibble and turned the rest back
+    # into the canary -- a leak that never was.
+    odd = CANARY.encode().hex() + "0"
+    assert len(odd) % 2 == 1
+    assert _try_hex(odd) is None
+
+
+def test_even_length_hex_still_decodes() -> None:
+    # The true positive must survive, case-insensitively and with separators:
+    # hex is genuinely case-insensitive, unlike Base64 (#13).
+    enc = CANARY.encode().hex()
+    assert _try_hex(enc) == CANARY
+    assert _try_hex(enc.upper()) == CANARY
+    assert _try_hex(_hex_pairs(CANARY, ":")) == CANARY
 
 
 # --- metrics --------------------------------------------------------------
