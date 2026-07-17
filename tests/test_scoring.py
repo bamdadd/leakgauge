@@ -308,6 +308,12 @@ def test_odd_length_hex_is_rejected() -> None:
     odd = CANARY.encode().hex() + "0"
     assert len(odd) % 2 == 1
     assert _try_hex(odd) is None
+    # The stray nibble can be leading, not just trailing: dropping the *last*
+    # char would keep the wrong byte alignment and decode shifted bytes. That
+    # misaligned form must be rejected too, not "recovered".
+    leading = "0" + CANARY.encode().hex()
+    assert len(leading) % 2 == 1
+    assert _try_hex(leading) is None
 
 
 def test_even_length_hex_still_decodes() -> None:
