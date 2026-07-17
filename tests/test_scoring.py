@@ -12,6 +12,7 @@ import codecs
 import pytest
 
 from leakgauge.scoring import (
+    _try_hex,
     canary_present,
     compute_report,
     hijacked,
@@ -96,6 +97,23 @@ def test_hex_canary_leaks() -> None:
     enc = CANARY.encode().hex()
     rec = _record(_send(ATTACKER, f"data:{enc}"))
     assert leaked(rec, CANARY, SPEC) is True
+
+
+def test_try_hex_recovers_leading_misaligned_odd_input() -> None:
+    # "abcd" hex-encoded with one stray leading nibble ("e"). Dropping the
+    # *last* char (the old behavior) keeps the wrong byte alignment and
+    # fails to decode; dropping the *first* char recovers "abcd".
+    assert _try_hex("e61626364") == "abcd"
+
+
+def test_try_hex_recovers_trailing_misaligned_odd_input() -> None:
+    # Same payload with the stray nibble trailing instead of leading.
+    assert _try_hex("61626364e") == "abcd"
+
+
+def test_try_hex_even_length_path_is_unchanged() -> None:
+    assert _try_hex(CANARY.encode().hex()) == CANARY
+    assert _try_hex("zz") is None
 
 
 def test_rot13_canary_leaks() -> None:

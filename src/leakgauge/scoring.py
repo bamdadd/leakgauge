@@ -177,12 +177,19 @@ def _try_b64(token: str) -> str | None:
 
 def _try_hex(token: str) -> str | None:
     cleaned = re.sub(r"[\s:,-]", "", token)
+    candidates = [cleaned]
     if len(cleaned) % 2:
-        cleaned = cleaned[:-1]
-    try:
-        return bytes.fromhex(cleaned).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return None
+        # Odd length: the stray nibble could be leading or trailing, and
+        # blindly dropping one end trusts a specific alignment. Try both
+        # (drop-last, then drop-first) and use whichever decodes to valid
+        # UTF-8, instead of silently committing to one that may be misaligned.
+        candidates = [cleaned[:-1], cleaned[1:]]
+    for candidate in candidates:
+        try:
+            return bytes.fromhex(candidate).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            continue
+    return None
 
 
 def canary_present(text: str, canary: str) -> bool:
