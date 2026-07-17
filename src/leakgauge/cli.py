@@ -67,7 +67,20 @@ def _adapter_factory(model_id: str) -> Callable[[Case, int], ModelAdapter]:
 
 
 def _run(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="leakgauge")
+    parser = argparse.ArgumentParser(
+        prog="leakgauge",
+        epilog=(
+            "There is also a separate 'report' subcommand for comparing\n"
+            "results you've already written, e.g.:\n"
+            "\n"
+            "  leakgauge report results/*.json --html docs/leaderboard/\n"
+            "\n"
+            "It loads one or more <model>.json summaries and prints the\n"
+            "hijack-vs-leakage rank reorder (add --html to also render a\n"
+            "static leaderboard page)."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "--list-cases",
         action="store_true",
