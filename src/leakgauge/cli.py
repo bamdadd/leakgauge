@@ -19,6 +19,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from leakgauge.pricing import price_for
 from leakgauge.runner import DEFAULT_MAX_STEPS
 from leakgauge.suite import (
     DEFAULT_K,
@@ -52,6 +53,24 @@ def _list_cases() -> int:
     for case in sorted(cases_for_suite("all"), key=lambda c: (c.family, c.id)):
         print(f"{case.family:<9} {case.id:<46} {_channel(case)}")
     return 0
+
+
+def _warn_if_unpriced(model_id: str) -> None:
+    """Warn once on stderr if a non-stub run's model has no PRICES entry.
+
+    An unpriced real model's spend silently reads $0 (:func:`price_for` returns
+    None), so flag it up front. The offline ``stub`` provider is meant to be
+    unpriced and never warns.
+    """
+    if model_id.partition(":")[0] == "stub":
+        return
+    if price_for(model_id) is not None:
+        return
+    print(
+        f"warning: no price entry for {model_id!r}; spend will read $0 "
+        "— add it to PRICES in src/leakgauge/pricing.py",
+        file=sys.stderr,
+    )
 
 
 def _adapter_factory(model_id: str) -> Callable[[Case, int], ModelAdapter]:
@@ -111,6 +130,8 @@ def _run(argv: list[str]) -> int:
             print(f"[leakgauge] {err}", file=sys.stderr)
             return 2
         suite_label = f"case:{args.case}"
+
+    _warn_if_unpriced(args.model)
 
     summary = run_and_summarise(
         suite_label,
