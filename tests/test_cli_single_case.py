@@ -43,8 +43,6 @@ def test_max_steps_negative_errors_cleanly(tmp_path: Path) -> None:
 
 def test_max_steps_one_still_runs(tmp_path: Path) -> None:
     case_id = cases_for_suite("all")[0].id
-    rc = main(
-        ["--case", case_id, "--max-steps", "1", "--k", "1", "--results-dir", str(tmp_path)]
-    )
+    rc = main(["--case", case_id, "--max-steps", "1", "--k", "1", "--results-dir", str(tmp_path)])
     assert rc == 0
     assert (tmp_path / "stub_demo.json").exists()
