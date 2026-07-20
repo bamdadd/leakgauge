@@ -12,6 +12,7 @@ import codecs
 import pytest
 
 from leakgauge.scoring import (
+    _try_b64,
     _try_hex,
     canary_present,
     compute_report,
@@ -395,3 +396,40 @@ def test_rank_reorder_kendall_tau() -> None:
     assert ro.hijack_ranks["m_hi"] == 1
     assert ro.leakage_ranks["m_leak"] == 1
     assert ro.kendall_tau == -1.0
+
+
+# --- _try_b64 direct unit tests (#22) ----------------------------------------
+# Its sibling _try_hex has dedicated tests; these pin _try_b64's own branches
+# not already covered indirectly through leaked().
+
+
+def test_try_b64_happy_path_roundtrip() -> None:
+    enc = base64.b64encode(CANARY.encode()).decode()
+    assert _try_b64(enc) == CANARY
+
+
+def test_try_b64_urlsafe_form_decodes_via_swap_branch() -> None:
+    # Payload chosen so the urlsafe alphabet actually differs (- and _ present):
+    # standard b64decode of the raw token fails, forcing the replace() branch.
+    payload = "subject?>>>"
+    enc = base64.urlsafe_b64encode(payload.encode()).decode()
+    assert "-" in enc or "_" in enc
+    assert _try_b64(enc) == payload
+
+
+def test_try_b64_recovers_stripped_padding() -> None:
+    # 34 bytes -> base64 output ends in '='; CANARY itself encodes padless.
+    payload = CANARY[:-2]
+    padded_form = base64.b64encode(payload.encode()).decode()
+    assert padded_form.endswith("=")
+    assert _try_b64(padded_form.rstrip("=")) == payload
+
+
+def test_try_b64_junk_returns_none() -> None:
+    # '!' is outside both base64 alphabets, so both candidates fail to decode.
+    assert _try_b64("!!not-base64!!") is None
+
+
+def test_try_b64_non_utf8_bytes_return_none() -> None:
+    enc = base64.b64encode(bytes([0xFF, 0xFE, 0xFD, 0xFC])).decode()
+    assert _try_b64(enc) is None
