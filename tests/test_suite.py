@@ -150,3 +150,37 @@ def test_cli_run_writes_results_and_report_reads_them(tmp_path: Path) -> None:
         json.dumps(_fake_summary("stub:other", hijack=0.4, leakage=0.9)) + "\n", encoding="utf-8"
     )
     assert main(["report", str(written), str(second)]) == 0
+
+
+def test_report_missing_file_errors_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = main(["report", str(tmp_path / "nope.json")])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert err.startswith("[leakgauge]")
+    assert "Traceback" not in err
+
+
+def test_report_malformed_json_errors_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    rc = main(["report", str(bad)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert err.startswith("[leakgauge]")
+    assert "Traceback" not in err
+
+
+def test_report_non_summary_json_errors_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other = tmp_path / "other.json"
+    other.write_text(json.dumps({"hello": "world"}), encoding="utf-8")
+    rc = main(["report", str(other)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert err.startswith("[leakgauge]")
+    assert "schema_version" in err

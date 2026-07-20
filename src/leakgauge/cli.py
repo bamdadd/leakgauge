@@ -15,6 +15,7 @@ both ASRs register with zero API keys. Real providers plug in via the same
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -156,7 +157,18 @@ def _report(argv: list[str]) -> int:
     )
     args = parser.parse_args(argv)
 
-    summaries = load_summaries(Path(p) for p in args.paths)
+    try:
+        summaries = load_summaries(Path(p) for p in args.paths)
+    except FileNotFoundError as err:
+        missing = getattr(err, "filename", None) or err
+        print(f"[leakgauge] no such file: {missing}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as err:
+        print(f"[leakgauge] invalid JSON: {err}", file=sys.stderr)
+        return 2
+    except ValueError as err:
+        print(f"[leakgauge] {err}", file=sys.stderr)
+        return 2
     reorder = rank_reorder(summaries)
     print(format_reorder_table(summaries, reorder))
     if args.html:
