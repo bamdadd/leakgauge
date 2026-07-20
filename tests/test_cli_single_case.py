@@ -28,3 +28,21 @@ def test_unknown_case_id_errors_cleanly(tmp_path: Path) -> None:
     rc = main(["--case", "no-such-case", "--results-dir", str(tmp_path)])
     assert rc == 2
     assert not (tmp_path / "stub_demo.json").exists()  # nothing written on error
+
+
+def test_max_steps_zero_errors_cleanly(tmp_path: Path) -> None:
+    rc = main(["--max-steps", "0", "--results-dir", str(tmp_path)])
+    assert rc == 2
+    assert not (tmp_path / "stub_demo.json").exists()  # nothing written on error
+
+
+def test_max_steps_negative_errors_cleanly(tmp_path: Path) -> None:
+    rc = main(["--max-steps", "-3", "--results-dir", str(tmp_path)])
+    assert rc == 2
+
+
+def test_max_steps_one_still_runs(tmp_path: Path) -> None:
+    case_id = cases_for_suite("all")[0].id
+    rc = main(["--case", case_id, "--max-steps", "1", "--k", "1", "--results-dir", str(tmp_path)])
+    assert rc == 0
+    assert (tmp_path / "stub_demo.json").exists()
