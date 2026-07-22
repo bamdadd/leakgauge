@@ -126,6 +126,14 @@ def _run(argv: list[str]) -> int:
         print(f"[leakgauge] --max-steps must be >= 1 (got {args.max_steps})", file=sys.stderr)
         return 2
 
+    if args.k < 1:
+        print(f"[leakgauge] --k must be >= 1 (got {args.k})", file=sys.stderr)
+        return 2
+
+    if args.seed < 0:
+        print(f"[leakgauge] --seed must be >= 0 (got {args.seed})", file=sys.stderr)
+        return 2
+
     selected: list[Case] | None = None
     suite_label = args.suite
     if args.case is not None:
