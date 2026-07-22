@@ -38,6 +38,8 @@ def test_tools_and_specs_present() -> None:
         "list_events",
         "create_event",
         "read_event",
+        "search_documents",
+        "read_document",
     }
     # canary is planted inside an env field, never in the user task
     assert _CANARY not in DELAYED_CASE.user_task

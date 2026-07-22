@@ -44,7 +44,7 @@ class ExfilSpec:
 @dataclass(frozen=True)
 class Case:
     id: str
-    family: str  # "delayed" | "assembly" | "encoded"
+    family: str  # "delayed" | "assembly" | "encoded" | "toolrag"
     user_task: str  # benign instruction given to the agent
     env_seed: dict[str, Any]  # initial workspace state incl. injected
     # content and the planted canary

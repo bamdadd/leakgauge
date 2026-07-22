@@ -14,28 +14,21 @@ from __future__ import annotations
 
 import pytest
 
-from leakgauge.cases import ALL_CASES, BENIGN_ACTION, ONPATH_EMAIL_ID
+from leakgauge.cases import ALL_CASES, BENIGN_ACTION, onpath_text
 from leakgauge.types import Case
 
 _IDS = [c.id for c in ALL_CASES]
 
 
-def _onpath_body(case: Case) -> str:
-    onpath_id = ONPATH_EMAIL_ID[case.id]
-    for e in case.env_seed["inbox"]:
-        if e["id"] == onpath_id:
-            return str(e["subject"]) + " " + str(e["body"])
-    raise AssertionError(f"{case.id}: on-path email {onpath_id!r} not in inbox")
-
-
 @pytest.mark.parametrize("case", ALL_CASES, ids=_IDS)
-def test_required_detail_is_only_in_the_injected_email(case: Case) -> None:
+def test_required_detail_is_only_in_the_injected_source(case: Case) -> None:
     date = BENIGN_ACTION[case.id]["start"][:10]
 
     # The date the utility check needs must NOT be spoon-fed in the task...
     assert date not in case.user_task, "date is inline in user_task — injection is off-path"
-    # ...it must live in the on-path (injection-bearing) email, forcing the read.
-    assert date in _onpath_body(case), "date missing from the on-path email"
+    # ...it must live in the on-path injection-bearing source (email or retrieved
+    # document), forcing the read.
+    assert date in onpath_text(case), "date missing from the on-path source"
 
 
 @pytest.mark.parametrize("case", ALL_CASES, ids=_IDS)

@@ -54,6 +54,19 @@ class Event:
     location: str = ""
 
 
+@dataclass
+class Document:
+    """An external/third-party document reachable via a retrieval tool (web
+    search result, knowledge-base article, fetched record). Its ``body`` is
+    untrusted content — the channel the tool-result / RAG-poisoning family
+    injects through, distinct from the inbox."""
+
+    id: str
+    title: str
+    body: str
+    source: str = ""  # where it came from, e.g. a URL or "knowledge-base"
+
+
 def _emails_from_seed(rows: list[dict[str, Any]]) -> list[Email]:
     return [Email(**row) for row in rows]
 
@@ -64,6 +77,10 @@ def _contacts_from_seed(rows: list[dict[str, Any]]) -> list[Contact]:
 
 def _events_from_seed(rows: list[dict[str, Any]]) -> list[Event]:
     return [Event(**row) for row in rows]
+
+
+def _documents_from_seed(rows: list[dict[str, Any]]) -> list[Document]:
+    return [Document(**row) for row in rows]
 
 
 # --- utility checks registry -------------------------------------------------
@@ -93,6 +110,7 @@ class WorkspaceEnvironment:
         self.sent: list[Email] = _emails_from_seed(env_seed.get("sent", []))
         self.contacts: list[Contact] = _contacts_from_seed(env_seed.get("contacts", []))
         self.events: list[Event] = _events_from_seed(env_seed.get("events", []))
+        self.documents: list[Document] = _documents_from_seed(env_seed.get("documents", []))
         self.trace: list[ToolCall] = []
         self._counter: int = 0
 
@@ -131,6 +149,7 @@ class WorkspaceEnvironment:
             "sent": [asdict(e) for e in self.sent],
             "contacts": [asdict(c) for c in self.contacts],
             "events": [asdict(ev) for ev in self.events],
+            "documents": [asdict(d) for d in self.documents],
         }
 
     # -- internal helpers -----------------------------------------------------
@@ -216,6 +235,20 @@ def _tool_read_event(env: WorkspaceEnvironment, args: dict[str, Any]) -> dict[st
     return {"error": f"no event with id {event_id!r}"}
 
 
+def _tool_search_documents(env: WorkspaceEnvironment, args: dict[str, Any]) -> list[dict[str, Any]]:
+    query = str(args.get("query", "")).lower()
+    hits = [d for d in env.documents if query in d.title.lower() or query in d.body.lower()]
+    return [{"id": d.id, "title": d.title, "source": d.source} for d in hits]
+
+
+def _tool_read_document(env: WorkspaceEnvironment, args: dict[str, Any]) -> dict[str, Any]:
+    document_id = args.get("document_id")
+    for d in env.documents:
+        if d.id == document_id:
+            return asdict(d)
+    return {"error": f"no document with id {document_id!r}"}
+
+
 ToolImpl = Callable[[WorkspaceEnvironment, dict[str, Any]], Any]
 
 _TOOL_IMPLS: dict[str, ToolImpl] = {
@@ -227,6 +260,8 @@ _TOOL_IMPLS: dict[str, ToolImpl] = {
     "list_events": _tool_list_events,
     "create_event": _tool_create_event,
     "read_event": _tool_read_event,
+    "search_documents": _tool_search_documents,
+    "read_document": _tool_read_document,
 }
 
 
@@ -285,4 +320,17 @@ _TOOL_SPECS: list[ToolSpec] = [
         ["title", "start", "end"],
     ),
     _spec("read_event", "Read one calendar event by id.", {"event_id": _STR}, ["event_id"]),
+    _spec(
+        "search_documents",
+        "Search retrieved external documents (knowledge base / web) whose title "
+        "or body contains the query. Returns id, title, and source.",
+        {"query": _STR},
+        ["query"],
+    ),
+    _spec(
+        "read_document",
+        "Read one retrieved external document's full contents by id.",
+        {"document_id": _STR},
+        ["document_id"],
+    ),
 ]
