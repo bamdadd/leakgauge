@@ -87,3 +87,29 @@ def test_write_site_emits_index_html(tmp_path: Path) -> None:
     path = write_site(summaries, rank_reorder(summaries), tmp_path)
     assert path == tmp_path / "index.html"
     assert path.read_text(encoding="utf-8").startswith("<!doctype html>")
+
+
+def test_rank_numerals_and_delta_render_for_a_reorder() -> None:
+    # a hijacks more (hijack rank 1) but b leaks more (leakage rank 1): both move.
+    summaries = [_summary("prov:a", 0.9, 0.3), _summary("prov:b", 0.6, 0.7)]
+    reorder = rank_reorder(summaries)
+    assert reorder is not None
+
+    out = render_html(summaries, reorder)
+    # Explicit rank integers at the endpoints (white numerals on the nodes).
+    assert 'fill="#ffffff">1</text>' in out
+    assert 'fill="#ffffff">2</text>' in out
+    # Both models change rank, so an up and a down glyph with the delta appear.
+    assert "&#9650;1" in out  # ▲1 (moved up)
+    assert "&#9660;1" in out  # ▼1 (moved down)
+
+
+def test_no_rank_delta_glyph_when_ranks_agree() -> None:
+    # a hijacks AND leaks more -> ranks agree (tau = 1), nobody moves.
+    summaries = [_summary("prov:a", 0.9, 0.8), _summary("prov:b", 0.4, 0.3)]
+    reorder = rank_reorder(summaries)
+    assert reorder is not None
+
+    out = render_html(summaries, reorder)
+    assert 'fill="#ffffff">1</text>' in out  # ranks still numbered
+    assert "&#9650;" not in out and "&#9660;" not in out  # but no movement glyph
