@@ -100,8 +100,26 @@ def _svg_reorder(reorder: RankReorder, rate_by_model: dict[str, tuple[float, flo
             f'<line x1="{left_x}" y1="{y1}" x2="{right_x}" y2="{y2}" '
             f'stroke="{stroke}" stroke-width="{w}" opacity="{0.95 if moved else 0.55}"/>'
         )
-        parts.append(f'<circle cx="{left_x}" cy="{y1}" r="6" fill="{stroke}"/>')
-        parts.append(f'<circle cx="{right_x}" cy="{y2}" r="6" fill="{stroke}"/>')
+        parts.append(f'<circle cx="{left_x}" cy="{y1}" r="9" fill="{stroke}"/>')
+        parts.append(f'<circle cx="{right_x}" cy="{y2}" r="9" fill="{stroke}"/>')
+        # Explicit rank position at each endpoint, so the reader doesn't have to
+        # infer it from vertical order.
+        parts.append(
+            f'<text x="{left_x}" y="{y1 + 4}" text-anchor="middle" font-size="11" '
+            f'font-weight="700" fill="#ffffff">{h_rank}</text>'
+        )
+        parts.append(
+            f'<text x="{right_x}" y="{y2 + 4}" text-anchor="middle" font-size="11" '
+            f'font-weight="700" fill="#ffffff">{l_rank}</text>'
+        )
+        # A mover gets its rank delta with an up/down glyph; a null (tau = 1)
+        # shows none. Rank 1 is best, so a smaller leakage rank is a move up.
+        if moved:
+            arrow = "&#9650;" if l_rank < h_rank else "&#9660;"
+            parts.append(
+                f'<text x="{right_x}" y="{y2 - 14}" text-anchor="middle" font-size="12" '
+                f'fill="{stroke}">{arrow}{abs(l_rank - h_rank)}</text>'
+            )
         name = html.escape(m)
         parts.append(
             f'<text x="{left_x - 18}" y="{y1 + 5}" text-anchor="end" class="svg-lab">'
